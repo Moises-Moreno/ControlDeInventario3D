@@ -17,22 +17,17 @@ Reescritura del prototipo (`prototipo.html`) como proyecto real.
 
 ## Puesta en marcha
 
-### 1. Base de datos
+### 1. API y base de datos (carpeta `api/`)
 
-**Opción A — PostgreSQL local (ya instalado):** creá la base una vez:
-
-```bash
-psql -U postgres -c "CREATE DATABASE inventario3d;"
-```
-
-**Opción B — Docker:** `docker compose up -d` (no la uses a la vez que un Postgres local en el 5432).
-
-### 2. API (carpeta `api/`)
+En desarrollo la base es **SQLite** (un archivo local, sin servidor). El mismo
+esquema de Prisma sirve para PostgreSQL en producción: se cambia `provider` a
+`postgresql` en `prisma/schema.prisma` y se vuelve a migrar.
 
 ```bash
 cd api
-cp .env.example .env   # ajustá DATABASE_URL si cambiaste usuario/clave
+cp .env.example .env
 npm install
+npx prisma migrate dev   # crea la base SQLite y la siembra con datos de ejemplo
 npm run start:dev
 ```
 
@@ -40,7 +35,7 @@ npm run start:dev
 - Health: http://localhost:3000/api/health
 - Documentación OpenAPI: http://localhost:3000/docs
 
-### 3. Frontend (carpeta `web/`)
+### 2. Frontend (carpeta `web/`)
 
 ```bash
 cd web

@@ -9,11 +9,11 @@ async function bootstrap() {
   // Todas las rutas quedan bajo /api
   app.setGlobalPrefix('api');
 
-  // CORS para el frontend de Vite (configurable por WEB_ORIGIN)
-  const origins = (process.env.WEB_ORIGIN ?? 'http://localhost:5173')
-    .split(',')
-    .map((o) => o.trim());
-  app.enableCors({ origin: origins, credentials: true });
+  // CORS: en desarrollo aceptamos cualquier localhost (Vite cambia de puerto).
+  app.enableCors({
+    origin: [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/],
+    credentials: true,
+  });
 
   // Validación global: descarta campos no declarados y transforma los DTOs
   app.useGlobalPipes(

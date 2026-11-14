@@ -1,12 +1,79 @@
-// Esquema de Prisma.
-// El modelo de datos completo (Producto, Rack, Pallet, Movimiento) se define en la
-// Etapa 3. Por ahora solo queda configurado el toolchain contra PostgreSQL.
+// Modelo de datos del inventario (Etapa 3).
+// Restricciones clave: código de producto y nombre de rack únicos, y una única
+// posición ocupada por (rack, nivel, posición). La baja de pallet es lógica (status).
 
 generator client {
   provider = "prisma-client-js"
 }
 
+// Para desarrollo usamos SQLite (sin servidor). El mismo modelo sirve para
+// PostgreSQL en producción: se cambia provider a "postgresql" y se re-migra.
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  name        String
+  unitsPerBox Int      @map("units_per_box")
+  color       String
+  example     Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  pallets     Pallet[]
+
+  @@map("products")
+}
+
+model Rack {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  levels    Int
+  positions Int
+  pallets   Pallet[]
+
+  @@map("racks")
+}
+
+model Pallet {
+  id        Int        @id @default(autoincrement())
+  /// Código correlativo PAL-001 (se asigna al crear). Nullable solo durante la creación.
+  code      String?    @unique
+  productId Int        @map("product_id")
+  product   Product    @relation(fields: [productId], references: [id])
+  front     Int
+  depth     Int
+  rows      Int
+  loose     Int
+  lote      String     @default("")
+  vence     String     @default("")
+  // Ubicación (nula si está sin ubicar)
+  rackId    Int?       @map("rack_id")
+  rack      Rack?      @relation(fields: [rackId], references: [id])
+  level     Int?
+  pos       Int?
+  /// activo | baja (baja lógica para conservar el historial)
+  status    String     @default("activo")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  movements Movement[]
+
+  // Una sola posición ocupada por celda. Los nulos (sin ubicar) son distintos en Postgres.
+  @@unique([rackId, level, pos], name: "uniq_position")
+  @@map("pallets")
+}
+
+model Movement {
+  id        Int      @id @default(autoincrement())
+  palletId  Int      @map("pallet_id")
+  pallet    Pallet   @relation(fields: [palletId], references: [id])
+  /// alta | recuento | ubicacion | traslado | baja
+  type      String
+  fromText  String?  @map("from_text")
+  toText    String?  @map("to_text")
+  user      String   @default("sistema")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("movements")
 }

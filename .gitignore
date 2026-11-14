@@ -18,6 +18,10 @@ api/dist/
 **/generated/
 api/prisma/*.db
 
+# Clúster local de PostgreSQL para desarrollo
+api/.pgdata/
+api/pg.log
+
 # Logs
 *.log
 npm-debug.log*
