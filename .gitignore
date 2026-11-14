@@ -1,0 +1,34 @@
+# Dependencias
+node_modules/
+**/node_modules/
+
+# Builds
+dist/
+build/
+web/dist/
+api/dist/
+*.tsbuildinfo
+
+# Entorno
+.env
+.env.*
+!.env.example
+
+# Prisma (cliente generado)
+**/generated/
+api/prisma/*.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Vite
+web/.vite/
+*.local

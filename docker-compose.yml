@@ -1,0 +1,20 @@
+# Alternativa para quien NO tenga PostgreSQL instalado localmente.
+# Si ya usás el Postgres local (puerto 5432), NO levantes esto a la vez: habría conflicto de puerto.
+#   docker compose up -d      # levanta la base
+#   docker compose down       # la detiene
+services:
+  db:
+    image: postgres:17
+    container_name: inventario3d-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: inventario3d
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

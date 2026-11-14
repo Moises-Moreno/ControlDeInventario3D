@@ -1,0 +1,12 @@
+// Esquema de Prisma.
+// El modelo de datos completo (Producto, Rack, Pallet, Movimiento) se define en la
+// Etapa 3. Por ahora solo queda configurado el toolchain contra PostgreSQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
