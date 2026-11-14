@@ -1,17 +1,28 @@
+import { getToken, onUnauthorized } from './token'
+
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000/api'
 
 /** Error con el mensaje en español que devuelve la API. */
 export class ApiError extends Error {}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getToken()
   let res: Response
   try {
     res = await fetch(BASE + path, {
-      headers: { 'Content-Type': 'application/json' },
       ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options?.headers,
+      },
     })
   } catch {
     throw new ApiError('No se pudo conectar con el servidor. ¿Está corriendo la API?')
+  }
+  if (res.status === 401) {
+    onUnauthorized.handler?.()
+    throw new ApiError('Tu sesión venció. Iniciá sesión de nuevo.')
   }
   if (!res.ok) {
     let message = 'Ocurrió un error en el servidor.'

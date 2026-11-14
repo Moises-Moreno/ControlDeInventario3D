@@ -1,23 +1,28 @@
 import { useState } from 'react'
-import { Moon, Sun, Boxes } from 'lucide-react'
+import { Moon, Sun, Boxes, LogOut } from 'lucide-react'
 import { BuilderPanel } from '@/components/BuilderPanel'
 import { ProductsPanel } from '@/components/ProductsPanel'
 import { WarehousePanel } from '@/components/WarehousePanel'
+import { ResumenPanel } from '@/components/ResumenPanel'
+import { HistorialPanel } from '@/components/HistorialPanel'
 import { BuilderScene } from '@/three/BuilderScene'
 import { WarehouseScene } from '@/three/WarehouseScene'
 import { useBuilder } from '@/store/builder'
 import { useInventory } from '@/store/inventory'
 import { useUi, type Tab } from '@/store/ui'
 import { useTheme } from '@/store/theme'
+import { useAuth } from '@/store/auth'
 import { useScene } from '@/store/scene'
 import { hasWebGL } from '@/three/webgl'
 import { looseColor } from '@/three/palette'
 import { productById, occupancy } from '@/domain/inventory'
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'armar', label: 'Armar pallet' },
+  { id: 'armar', label: 'Armar' },
   { id: 'productos', label: 'Productos' },
   { id: 'almacen', label: 'Almacén' },
+  { id: 'resumen', label: 'Resumen' },
+  { id: 'historial', label: 'Historial' },
 ]
 
 function ThemeToggle() {
@@ -32,6 +37,27 @@ function ThemeToggle() {
     >
       {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
     </button>
+  )
+}
+
+function UserMenu() {
+  const user = useAuth((s) => s.user)
+  const logout = useAuth((s) => s.logout)
+  return (
+    <div className="flex items-center gap-2">
+      <div className="hidden text-right leading-tight sm:block">
+        <span className="block text-xs font-semibold">{user?.username}</span>
+        <span className="block text-[11px] uppercase text-muted-foreground">{user?.role}</span>
+      </div>
+      <button
+        type="button"
+        onClick={logout}
+        aria-label="Cerrar sesión"
+        className="flex size-9 items-center justify-center rounded-md border border-border bg-card hover:bg-secondary"
+      >
+        <LogOut className="size-4" />
+      </button>
+    </div>
   )
 }
 
@@ -62,13 +88,16 @@ export default function App() {
         <header className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold uppercase tracking-tight">Inventario de almacén</h1>
-            <p className="text-sm text-muted-foreground">Etapa 3 · Servidor y base de datos</p>
+            <p className="text-sm text-muted-foreground">Etapa 4 · Funciones nuevas</p>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <UserMenu />
+          </div>
         </header>
 
         {/* Pestañas */}
-        <div className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-secondary p-1" role="tablist">
+        <div className="grid grid-cols-5 gap-1 rounded-lg border border-border bg-secondary p-1" role="tablist">
           {TABS.map((tb) => (
             <button
               key={tb.id}
@@ -76,7 +105,7 @@ export default function App() {
               role="tab"
               aria-selected={tab === tb.id}
               onClick={() => setTab(tb.id)}
-              className={`h-9 rounded-md text-sm font-semibold ${tab === tb.id ? 'bg-card shadow-sm' : 'text-muted-foreground'}`}
+              className={`h-9 rounded-md text-xs font-semibold ${tab === tb.id ? 'bg-card shadow-sm' : 'text-muted-foreground'}`}
             >
               {tb.label}
             </button>
@@ -86,6 +115,8 @@ export default function App() {
         {tab === 'armar' && <BuilderPanel />}
         {tab === 'productos' && <ProductsPanel />}
         {tab === 'almacen' && <WarehousePanel />}
+        {tab === 'resumen' && <ResumenPanel />}
+        {tab === 'historial' && <HistorialPanel />}
       </aside>
 
       {/* Escena 3D */}

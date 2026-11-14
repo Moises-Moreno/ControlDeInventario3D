@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useInventory } from '@/store/inventory'
 import { useUi } from '@/store/ui'
+import { useAuth } from '@/store/auth'
 import { stock } from '@/domain/inventory'
 
 const fmt = (n: number) => n.toLocaleString('es-BO')
@@ -15,6 +16,7 @@ export function ProductsPanel() {
   const deleteProduct = useInventory((s) => s.deleteProduct)
   const editProductId = useUi((s) => s.editProductId)
   const clearEditProduct = useUi((s) => s.clearEditProduct)
+  const isAdmin = useAuth((s) => s.user?.role) === 'admin'
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState(BLANK)
@@ -126,7 +128,7 @@ export function ProductsPanel() {
             <button type="button" onClick={clear} className="h-10 rounded-md border border-border bg-card px-4 font-semibold hover:bg-secondary">
               {editingId != null ? 'Cancelar' : 'Limpiar'}
             </button>
-            {editingId != null && (
+            {editingId != null && isAdmin && (
               <button type="button" onClick={remove} className="h-10 rounded-md border border-border bg-card px-4 font-semibold text-destructive hover:bg-secondary">
                 Eliminar
               </button>

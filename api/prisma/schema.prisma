@@ -64,6 +64,17 @@ model Pallet {
   @@map("pallets")
 }
 
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  /// admin | operador
+  role         String   @default("operador")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("users")
+}
+
 model Movement {
   id        Int      @id @default(autoincrement())
   palletId  Int      @map("pallet_id")

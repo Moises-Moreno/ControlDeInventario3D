@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { Loc } from '@/domain/inventory'
 
-export type Tab = 'armar' | 'productos' | 'almacen'
+export type Tab = 'armar' | 'productos' | 'almacen' | 'resumen' | 'historial'
 
 interface UiState {
   tab: Tab

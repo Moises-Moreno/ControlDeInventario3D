@@ -3,6 +3,7 @@ import { Minus, Plus } from 'lucide-react'
 import { useInventory } from '@/store/inventory'
 import { useUi } from '@/store/ui'
 import { useBuilder } from '@/store/builder'
+import { useAuth } from '@/store/auth'
 import { totals } from '@/domain/pallet'
 import {
   freeSlots,
@@ -214,6 +215,7 @@ function RackEditor({ rack, onError, onDelete }: { rack: Rack; onError: (msg: st
   const pallets = useInventory((s) => s.pallets)
   const renameRack = useInventory((s) => s.renameRack)
   const setRackSize = useInventory((s) => s.setRackSize)
+  const isAdmin = useAuth((s) => s.user?.role) === 'admin'
   const [name, setName] = useState(rack.name)
 
   const inRack = pallets.filter((p) => p.loc && p.loc.rackId === rack.id)
@@ -239,7 +241,7 @@ function RackEditor({ rack, onError, onDelete }: { rack: Rack; onError: (msg: st
         <span className="flex-1 text-right text-xs text-muted-foreground">
           {inRack.length} de {rack.levels * rack.positions} ocupadas
         </span>
-        <button type="button" onClick={onDelete} className="px-1 text-xs font-medium text-destructive">Quitar</button>
+        {isAdmin && <button type="button" onClick={onDelete} className="px-1 text-xs font-medium text-destructive">Quitar</button>}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <RackStepper rack={rack} field="levels" label="Niveles de alto" max={MAX_LEVELS} onError={onError} setRackSize={setRackSize} />

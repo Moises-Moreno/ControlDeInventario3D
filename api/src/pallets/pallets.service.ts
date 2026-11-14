@@ -19,7 +19,7 @@ export class PalletsService {
     return pallets.map(toApiPallet);
   }
 
-  async create(dto: CreatePalletDto) {
+  async create(dto: CreatePalletDto, user: string) {
     await this.ensureProduct(dto.productId);
     const b = normalizeBuild(dto);
     const pallet = await this.prisma.$transaction(async (tx) => {
@@ -35,13 +35,13 @@ export class PalletsService {
         },
       });
       const withCode = await tx.pallet.update({ where: { id: created.id }, data: { code: palCode(created.id) } });
-      await tx.movement.create({ data: { palletId: created.id, type: 'alta' } });
+      await tx.movement.create({ data: { palletId: created.id, type: 'alta', user } });
       return withCode;
     });
     return toApiPallet(pallet);
   }
 
-  async recount(id: number, dto: CreatePalletDto) {
+  async recount(id: number, dto: CreatePalletDto, user: string) {
     await this.getActive(id);
     await this.ensureProduct(dto.productId);
     const b = normalizeBuild(dto);
@@ -58,13 +58,13 @@ export class PalletsService {
           vence: dto.vence ?? '',
         },
       });
-      await tx.movement.create({ data: { palletId: id, type: 'recuento' } });
+      await tx.movement.create({ data: { palletId: id, type: 'recuento', user } });
       return u;
     });
     return toApiPallet(updated);
   }
 
-  async place(id: number, dto: PlaceDto) {
+  async place(id: number, dto: PlaceDto, user: string) {
     const pallet = await this.getActive(id);
     const rack = await this.prisma.rack.findUnique({ where: { id: dto.rackId } });
     if (!rack) throw new BadRequestException('No se encontró el rack indicado.');
@@ -77,7 +77,7 @@ export class PalletsService {
     try {
       const updated = await this.prisma.$transaction(async (tx) => {
         const u = await tx.pallet.update({ where: { id }, data: { rackId: dto.rackId, level: dto.level, pos: dto.pos } });
-        await tx.movement.create({ data: { palletId: id, type: wasPlaced ? 'traslado' : 'ubicacion', fromText, toText } });
+        await tx.movement.create({ data: { palletId: id, type: wasPlaced ? 'traslado' : 'ubicacion', fromText, toText, user } });
         return u;
       });
       return toApiPallet(updated);
@@ -87,24 +87,24 @@ export class PalletsService {
     }
   }
 
-  async unplace(id: number) {
+  async unplace(id: number, user: string) {
     const pallet = await this.getActive(id);
     if (pallet.rackId == null) return toApiPallet(pallet);
     const fromText = await this.locText(pallet.rackId, pallet.level!, pallet.pos!);
     const updated = await this.prisma.$transaction(async (tx) => {
       const u = await tx.pallet.update({ where: { id }, data: { rackId: null, level: null, pos: null } });
-      await tx.movement.create({ data: { palletId: id, type: 'ubicacion', fromText, toText: null } });
+      await tx.movement.create({ data: { palletId: id, type: 'ubicacion', fromText, toText: null, user } });
       return u;
     });
     return toApiPallet(updated);
   }
 
-  async baja(id: number) {
+  async baja(id: number, user: string) {
     const pallet = await this.getActive(id);
     const fromText = pallet.rackId != null ? await this.locText(pallet.rackId, pallet.level!, pallet.pos!) : null;
     await this.prisma.$transaction(async (tx) => {
       await tx.pallet.update({ where: { id }, data: { status: 'baja', rackId: null, level: null, pos: null } });
-      await tx.movement.create({ data: { palletId: id, type: 'baja', fromText } });
+      await tx.movement.create({ data: { palletId: id, type: 'baja', fromText, user } });
     });
     return { ok: true };
   }

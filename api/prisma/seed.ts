@@ -1,12 +1,22 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 const palCode = (n: number) => 'PAL-' + String(n).padStart(3, '0');
 
+async function seedUsers() {
+  if ((await prisma.user.count()) > 0) return;
+  await prisma.user.create({ data: { username: 'admin', passwordHash: await bcrypt.hash('admin123', 10), role: 'admin' } });
+  await prisma.user.create({ data: { username: 'operador', passwordHash: await bcrypt.hash('operador123', 10), role: 'operador' } });
+  console.log('Usuarios de ejemplo: admin/admin123 (admin) y operador/operador123 (operador).');
+}
+
 async function main() {
+  await seedUsers();
+
   if ((await prisma.product.count()) > 0) {
-    console.log('Ya hay datos; no se vuelve a sembrar.');
+    console.log('Ya hay datos de inventario; no se vuelve a sembrar.');
     return;
   }
 
