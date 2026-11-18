@@ -103,7 +103,7 @@ export function ProductsPanel() {
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           {editingId != null ? 'Editar producto' : 'Nuevo producto'}
         </h2>
-        <form onSubmit={submit} className="grid grid-cols-2 gap-3" noValidate>
+        <form onSubmit={submit} className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3" noValidate>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">Código</span>
             <input type="text" maxLength={20} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className="h-9 rounded-md border border-border bg-secondary px-2.5 uppercase outline-none focus-visible:ring-2 focus-visible:ring-ring" />

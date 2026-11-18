@@ -80,7 +80,7 @@ export function BuilderPanel() {
           </p>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">Lote (opcional)</span>
             <input
@@ -108,7 +108,7 @@ export function BuilderPanel() {
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           2 · Armado del pallet
         </h2>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3">
           <Stepper label="Cajas de frente" value={b.front} min={LIMITS.front.min} max={LIMITS.front.max} onChange={(v) => b.set({ front: v })} onStep={(d) => b.step('front', d)} />
           <Stepper label="Cajas de fondo" value={b.depth} min={LIMITS.depth.min} max={LIMITS.depth.max} onChange={(v) => b.set({ depth: v })} onStep={(d) => b.step('depth', d)} />
           <Stepper label="Filas completas" value={b.rows} min={LIMITS.rows.min} max={LIMITS.rows.max} onChange={(v) => b.set({ rows: v })} onStep={(d) => b.step('rows', d)} />

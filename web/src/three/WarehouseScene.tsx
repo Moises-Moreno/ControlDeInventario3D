@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { GridHelper, LineBasicMaterial } from 'three'
 import { levelHeight, productById, palletAt, type Loc, type Rack, type Pallet, type Product } from '@/domain/inventory'
@@ -10,24 +10,22 @@ import { useScene } from '@/store/scene'
 import { sceneColors } from './palette'
 import { CELL, rackZ, warehouseDims } from './warehouseLayout'
 import { MiniPallet } from './MiniPallet'
+import { useCameraFraming } from './framing'
 
-type Framer = { target: { set: (x: number, y: number, z: number) => void }; update: () => void }
-
-function WarehouseCamera({ r, height }: { r: number; height: number }) {
-  const camera = useThree((s) => s.camera)
-  const controls = useThree((s) => s.controls) as Framer | null
+/** Encuadra el almacén completo; se reencuadra al pedir "Vista inicial" o al cambiar sus medidas. */
+function WarehouseCamera({ len, depth, height }: { len: number; depth: number; height: number }) {
   const frameNonce = useScene((s) => s.frameNonce)
-  useEffect(() => {
-    const dist = r * 1.6 + 5
-    const ty = height * 0.35
-    camera.position.set(dist * 0.5, ty + dist * 0.5, dist * 0.85)
-    if (controls) {
-      controls.target.set(0, ty, 0)
-      controls.update()
-    } else {
-      camera.lookAt(0, ty, 0)
-    }
-  }, [frameNonce, camera, controls, r, height])
+
+  useCameraFraming(
+    () => ({
+      // Semidiagonal de la caja que envuelve a todos los racks.
+      radius: 0.5 * Math.hypot(len, depth, height),
+      target: [0, height * 0.35, 0],
+      dir: [0.5, 0.5, 0.85],
+    }),
+    `${frameNonce}|${len}|${depth}|${height.toFixed(2)}`,
+  )
+
   return null
 }
 
@@ -131,7 +129,7 @@ export function WarehouseScene() {
         minDistance={2}
         maxDistance={90}
       />
-      <WarehouseCamera r={R} height={dims.height} />
+      <WarehouseCamera len={dims.maxLen} depth={dims.depth} height={dims.height} />
     </Canvas>
   )
 }

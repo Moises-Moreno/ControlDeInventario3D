@@ -243,7 +243,7 @@ function RackEditor({ rack, onError, onDelete }: { rack: Rack; onError: (msg: st
         </span>
         {isAdmin && <button type="button" onClick={onDelete} className="px-1 text-xs font-medium text-destructive">Quitar</button>}
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3">
         <RackStepper rack={rack} field="levels" label="Niveles de alto" max={MAX_LEVELS} onError={onError} setRackSize={setRackSize} />
         <RackStepper rack={rack} field="positions" label="Posiciones por nivel" max={MAX_POS} onError={onError} setRackSize={setRackSize} />
       </div>
@@ -272,14 +272,14 @@ function RackStepper({
     onError(res.ok ? '' : res.error)
   }
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 flex-col gap-1">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <div className="grid grid-cols-[38px_1fr_38px]">
-        <button type="button" aria-label={`Reducir ${label}`} onClick={() => set(value - 1)} disabled={value <= 1} className="flex h-9 items-center justify-center rounded-l-md border border-border bg-card hover:bg-secondary disabled:opacity-40">
+      <div className="grid grid-cols-[44px_minmax(0,1fr)_44px]">
+        <button type="button" aria-label={`Reducir ${label}`} onClick={() => set(value - 1)} disabled={value <= 1} className="flex h-11 items-center justify-center rounded-l-md border border-border bg-card hover:bg-secondary disabled:opacity-40">
           <Minus className="size-4" />
         </button>
-        <input readOnly value={value} className="h-9 border-y border-border bg-secondary text-center tabular-nums outline-none" />
-        <button type="button" aria-label={`Aumentar ${label}`} onClick={() => set(value + 1)} disabled={value >= max} className="flex h-9 items-center justify-center rounded-r-md border border-border bg-card hover:bg-secondary disabled:opacity-40">
+        <input readOnly value={value} className="h-11 w-full min-w-0 border-y border-border bg-secondary text-center tabular-nums outline-none" />
+        <button type="button" aria-label={`Aumentar ${label}`} onClick={() => set(value + 1)} disabled={value >= max} className="flex h-11 items-center justify-center rounded-r-md border border-border bg-card hover:bg-secondary disabled:opacity-40">
           <Plus className="size-4" />
         </button>
       </div>

@@ -1,14 +1,8 @@
 import { useEffect, useMemo } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { GridHelper, LineBasicMaterial } from 'three'
 import { PALLET, BOX_H } from '@/domain/pallet'
-
-/** Lo mínimo que usamos de OrbitControls para reencuadrar. */
-type Framer = {
-  target: { set: (x: number, y: number, z: number) => void }
-  update: () => void
-}
 import { productById } from '@/domain/inventory'
 import { useBuilder } from '@/store/builder'
 import { useInventory } from '@/store/inventory'
@@ -17,29 +11,25 @@ import { useScene } from '@/store/scene'
 import { sceneColors } from './palette'
 import { PalletMesh } from './PalletMesh'
 import { BoxStack } from './BoxStack'
+import { useCameraFraming } from './framing'
 
 const SUN_R = 3.5
 
-/** Reencuadra la cámara al pallet cuando se pide "Vista inicial" (y al montar). */
+/** Encuadra la cámara al pallet al montar, en "Vista inicial" y cuando cambia el tamaño. */
 function CameraRig() {
-  const camera = useThree((s) => s.camera)
-  const controls = useThree((s) => s.controls) as Framer | null
   const frameNonce = useScene((s) => s.frameNonce)
 
-  useEffect(() => {
+  useCameraFraming(() => {
     const { rows, loose } = useBuilder.getState()
     const layers = rows + (loose > 0 ? 1 : 0)
     const top = PALLET.h + BOX_H * Math.max(layers, 1)
-    const dist = 2.6 + top * 1.25
-    const ty = top * 0.45
-    camera.position.set(dist * 0.72, ty + dist * 0.48, dist * 0.82)
-    if (controls) {
-      controls.target.set(0, ty, 0)
-      controls.update()
-    } else {
-      camera.lookAt(0, ty, 0)
+    return {
+      // Semidiagonal de la caja que envuelve al pallet con su carga.
+      radius: 0.5 * Math.hypot(PALLET.w, PALLET.d, top),
+      target: [0, top * 0.45, 0],
+      dir: [0.72, 0.48, 0.82],
     }
-  }, [frameNonce, camera, controls])
+  }, frameNonce)
 
   return null
 }
