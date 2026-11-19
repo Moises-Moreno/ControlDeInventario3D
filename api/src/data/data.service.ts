@@ -18,6 +18,9 @@ interface RawReception {
   lines?: { presentationId: number; quantity: number; boxes: number; leftoverUnits?: number; lote?: string; vence?: string }[];
 }
 
+/** Tablas que se importan con su id original (constantes, no vienen del usuario). */
+const ID_TABLES = ['products', 'presentations', 'racks', 'receptions', 'pallets'] as const;
+
 @Injectable()
 export class DataService {
   constructor(private readonly prisma: PrismaService) {}
@@ -102,6 +105,15 @@ export class DataService {
               status: p.status ?? 'activo',
             },
           });
+        }
+        // PostgreSQL no adelanta el contador de ids cuando se insertan ids explícitos:
+        // se lo lleva al máximo importado para que los próximos registros no choquen.
+        if (process.env.DATABASE_URL?.startsWith('postgres')) {
+          for (const table of ID_TABLES) {
+            await tx.$executeRawUnsafe(
+              `SELECT setval(pg_get_serial_sequence('"${table}"', 'id'), COALESCE((SELECT MAX(id) FROM "${table}"), 0) + 1, false)`,
+            );
+          }
         }
       });
     } catch {

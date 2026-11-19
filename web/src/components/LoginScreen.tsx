@@ -62,9 +62,12 @@ export function LoginScreen() {
           </button>
         </form>
 
-        <p className="text-center text-xs text-muted-foreground">
-          Demo: <b>admin / admin123</b> (admin) · <b>operador / operador123</b> (operador)
-        </p>
+        {/* Las contraseñas de ejemplo solo existen en desarrollo: en producción no se muestran. */}
+        {import.meta.env.DEV && (
+          <p className="text-center text-xs text-muted-foreground">
+            Demo: <b>admin / admin123</b> (admin) · <b>operador / operador123</b> (operador)
+          </p>
+        )}
       </div>
     </div>
   )

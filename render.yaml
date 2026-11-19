@@ -1,0 +1,29 @@
+# Blueprint de Render: un solo servicio web (la API de NestJS sirve también la web compilada).
+# La base de datos es PostgreSQL en Neon: su cadena de conexión se carga en DATABASE_URL.
+services:
+  - type: web
+    name: inventario3d
+    runtime: node
+    plan: free
+    region: ohio
+    branch: main
+    buildCommand: >-
+      npm ci --include=dev --prefix web &&
+      npm run build --prefix web &&
+      npm ci --include=dev --prefix api &&
+      npm run build:render --prefix api
+    startCommand: npm run start:render --prefix api
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: OPERADOR_PASSWORD
+        sync: false

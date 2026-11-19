@@ -22,7 +22,10 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "db:migrate": "prisma migrate dev",
     "db:seed": "node prisma/seed.ts",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "db:pg-schema": "node scripts/pg-schema.mjs",
+    "build:render": "node scripts/pg-schema.mjs && prisma generate --schema prisma/postgres/schema.prisma && nest build",
+    "start:render": "prisma migrate deploy --schema prisma/postgres/schema.prisma && node prisma/seed.ts && node dist/main.js"
   },
   "prisma": {
     "seed": "node prisma/seed.ts"
@@ -60,5 +63,8 @@
     "typescript": "^6.0.2",
     "vite": "^8.0.0",
     "vitest": "^4.1.2"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

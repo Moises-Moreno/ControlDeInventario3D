@@ -23,11 +23,21 @@ const PRODUCTS = [
   },
 ];
 
+/**
+ * Usuarios iniciales. En producción las contraseñas salen de ADMIN_PASSWORD y
+ * OPERADOR_PASSWORD (obligatorias); en desarrollo se usan las de ejemplo.
+ */
 async function seedUsers() {
   if ((await prisma.user.count()) > 0) return;
-  await prisma.user.create({ data: { username: 'admin', passwordHash: await bcrypt.hash('admin123', 10), role: 'admin' } });
-  await prisma.user.create({ data: { username: 'operador', passwordHash: await bcrypt.hash('operador123', 10), role: 'operador' } });
-  console.log('Usuarios de ejemplo: admin/admin123 (admin) y operador/operador123 (operador).');
+  const prod = process.env.NODE_ENV === 'production';
+  const adminPass = process.env.ADMIN_PASSWORD || (prod ? '' : 'admin123');
+  const operadorPass = process.env.OPERADOR_PASSWORD || (prod ? '' : 'operador123');
+  if (!adminPass || !operadorPass) {
+    throw new Error('Faltan ADMIN_PASSWORD y/o OPERADOR_PASSWORD para crear los usuarios iniciales.');
+  }
+  await prisma.user.create({ data: { username: 'admin', passwordHash: await bcrypt.hash(adminPass, 10), role: 'admin' } });
+  await prisma.user.create({ data: { username: 'operador', passwordHash: await bcrypt.hash(operadorPass, 10), role: 'operador' } });
+  console.log(prod ? 'Usuarios admin y operador creados.' : 'Usuarios de ejemplo: admin/admin123 (admin) y operador/operador123 (operador).');
 }
 
 async function seedRacks() {
@@ -61,6 +71,18 @@ async function seedProducts() {
 }
 
 async function main() {
+  // En producción el seed corre en cada arranque: solo carga datos en una base vacía,
+  // para no revivir racks o productos que alguien haya borrado a propósito.
+  if (process.env.NODE_ENV === 'production') {
+    const empty = (await prisma.rack.count()) === 0 && (await prisma.product.count()) === 0;
+    await seedUsers();
+    if (empty) {
+      await seedRacks();
+      await seedProducts();
+    }
+    console.log('Datos base listos.');
+    return;
+  }
   await seedUsers();
   await seedRacks();
   await seedProducts();
