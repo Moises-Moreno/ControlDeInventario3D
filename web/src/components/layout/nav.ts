@@ -1,4 +1,4 @@
-import { ChartColumn, History, Package, Tags, Warehouse, type LucideIcon } from 'lucide-react'
+import { ChartColumn, History, Package, PackagePlus, Tags, Warehouse, type LucideIcon } from 'lucide-react'
 import type { Tab } from '@/store/ui'
 
 export interface NavItem {
@@ -13,6 +13,7 @@ export interface NavItem {
 }
 
 export const NAV: NavItem[] = [
+  { id: 'recepcion', label: 'Recepción', title: 'Recepción', description: 'Recibí mercadería y ubicá los pallets', icon: PackagePlus },
   { id: 'armar', label: 'Armar', title: 'Armar pallet', description: 'Armá y recontá pallets', icon: Package },
   { id: 'productos', label: 'Productos', title: 'Productos', description: 'Catálogo y stock', icon: Tags },
   { id: 'almacen', label: 'Almacén', title: 'Almacén', description: 'Racks y ubicaciones', icon: Warehouse },

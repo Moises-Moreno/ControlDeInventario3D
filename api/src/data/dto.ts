@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsArray, IsInt, IsOptional, IsString } from 'class-validator';
 
 export class ImportDto {
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ example: 2 })
   @IsInt()
   version!: number;
 
@@ -17,9 +17,18 @@ export class ImportDto {
 
   @ApiProperty({ type: [Object] })
   @IsArray()
+  presentations!: unknown[];
+
+  @ApiProperty({ type: [Object] })
+  @IsArray()
   racks!: unknown[];
 
   @ApiProperty({ type: [Object] })
   @IsArray()
   pallets!: unknown[];
+
+  @ApiPropertyOptional({ type: [Object] })
+  @IsOptional()
+  @IsArray()
+  receptions?: unknown[];
 }

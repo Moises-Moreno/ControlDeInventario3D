@@ -36,3 +36,6 @@ Thumbs.db
 # Vite
 web/.vite/
 *.local
+
+# Respaldos locales de la base de desarrollo
+api/prisma/*.bak*

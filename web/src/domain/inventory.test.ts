@@ -14,7 +14,7 @@ import {
 const racks: Rack[] = [{ id: 1, name: 'A', levels: 2, positions: 2 }]
 
 function pallet(id: number, productId: number, partial: Partial<Pallet> = {}): Pallet {
-  return { id, pal: palCode(id), productId, front: 2, depth: 2, rows: 1, loose: 0, lote: '', vence: '', loc: null, ...partial }
+  return { id, pal: palCode(id), productId, presentationId: null, receptionId: null, front: 2, depth: 2, rows: 1, loose: 0, lote: '', vence: '', kind: 'mermado', loc: null, ...partial }
 }
 
 describe('palCode y locCode', () => {
@@ -23,7 +23,7 @@ describe('palCode y locCode', () => {
     expect(palCode(42)).toBe('PAL-042')
   })
   it('formatea la posición', () => {
-    expect(locCode(racks[0], { rackId: 1, level: 2, pos: 3 })).toBe('A-N2-P3')
+    expect(locCode(racks[0], { rackId: 1, level: 2, pos: 3 })).toBe('A-F003-N2')
   })
 })
 

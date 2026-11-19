@@ -6,10 +6,16 @@ export interface StockRow {
   code: string
   name: string
   color: string
-  unitsPerBox: number
+  unit: string
+  active: boolean
   boxes: number
+  /** Envases. */
   units: number
+  /** Contenido total en la unidad del producto (L, kg...). */
+  volume: number
   pallets: number
+  fullPallets: number
+  partialPallets: number
 }
 
 export interface ExpiringRow {

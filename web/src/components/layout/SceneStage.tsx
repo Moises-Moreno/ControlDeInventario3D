@@ -9,6 +9,7 @@ import { useInventory } from '@/store/inventory'
 import { useUi } from '@/store/ui'
 import { useTheme } from '@/store/theme'
 import { useScene } from '@/store/scene'
+import { useReception } from '@/store/reception'
 import { useLayout } from '@/store/layout'
 import { productById, occupancy } from '@/domain/inventory'
 import { cn } from '@/lib/utils'
@@ -47,6 +48,8 @@ export function SceneStage({ compact = false }: { compact?: boolean }) {
   const tab = useUi((s) => s.tab)
   const placingId = useUi((s) => s.placingId)
   const requestFrame = useScene((s) => s.requestFrame)
+  const preview = useScene((s) => s.preview)
+  const receptionStep = useReception((s) => s.step)
   const theme = useTheme((s) => s.theme)
   const sceneFull = useLayout((s) => s.sceneFull)
   const toggleSceneFull = useLayout((s) => s.toggleSceneFull)
@@ -58,9 +61,10 @@ export function SceneStage({ compact = false }: { compact?: boolean }) {
   const racks = useInventory((s) => s.racks)
 
   const product = productById(products, productId)
-  const color = product?.color ?? '#c89a5a'
+  const color = preview?.color ?? product?.color ?? '#c89a5a'
   const looseHex = looseColor(color, theme)
-  const warehouse = tab === 'almacen'
+  // El almacén se ve en su sección y al llevar los pallets recibidos a su lugar.
+  const warehouse = tab === 'almacen' || (tab === 'recepcion' && receptionStep === 'ubicar')
   const { cap, used } = occupancy(racks, pallets)
   const placing = pallets.find((p) => p.id === placingId) ?? null
 
@@ -79,6 +83,9 @@ export function SceneStage({ compact = false }: { compact?: boolean }) {
   if (warehouse) {
     title = placing ? `Ubicando ${placing.pal}` : 'Almacén'
     subtitle = placing ? 'tocá una posición libre' : `${used} de ${cap} ocupadas`
+  } else if (preview && tab === 'recepcion') {
+    title = preview.title
+    subtitle = preview.subtitle
   } else {
     title = product ? product.code : 'Sin producto'
     subtitle = product ? product.name : 'elegí un producto'

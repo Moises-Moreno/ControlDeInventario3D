@@ -15,17 +15,22 @@ export class PalletsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list() {
-    const pallets = await this.prisma.pallet.findMany({ where: { status: 'activo' }, orderBy: { id: 'asc' } });
-    return pallets.map(toApiPallet);
+    const pallets = await this.prisma.pallet.findMany({
+      where: { status: 'activo' },
+      orderBy: { id: 'asc' },
+      include: { presentation: true },
+    });
+    return pallets.map((p) => toApiPallet(p, p.presentation));
   }
 
   async create(dto: CreatePalletDto, user: string) {
-    await this.ensureProduct(dto.productId);
+    const presentation = await this.ensurePresentation(dto.productId, dto.presentationId);
     const b = normalizeBuild(dto);
     const pallet = await this.prisma.$transaction(async (tx) => {
       const created = await tx.pallet.create({
         data: {
           productId: dto.productId,
+          presentationId: dto.presentationId,
           front: b.front,
           depth: b.depth,
           rows: b.rows,
@@ -38,18 +43,19 @@ export class PalletsService {
       await tx.movement.create({ data: { palletId: created.id, type: 'alta', user } });
       return withCode;
     });
-    return toApiPallet(pallet);
+    return toApiPallet(pallet, presentation);
   }
 
   async recount(id: number, dto: CreatePalletDto, user: string) {
     await this.getActive(id);
-    await this.ensureProduct(dto.productId);
+    const presentation = await this.ensurePresentation(dto.productId, dto.presentationId);
     const b = normalizeBuild(dto);
     const updated = await this.prisma.$transaction(async (tx) => {
       const u = await tx.pallet.update({
         where: { id },
         data: {
           productId: dto.productId,
+          presentationId: dto.presentationId,
           front: b.front,
           depth: b.depth,
           rows: b.rows,
@@ -61,7 +67,7 @@ export class PalletsService {
       await tx.movement.create({ data: { palletId: id, type: 'recuento', user } });
       return u;
     });
-    return toApiPallet(updated);
+    return toApiPallet(updated, presentation);
   }
 
   async place(id: number, dto: PlaceDto, user: string) {
@@ -80,7 +86,7 @@ export class PalletsService {
         await tx.movement.create({ data: { palletId: id, type: wasPlaced ? 'traslado' : 'ubicacion', fromText, toText, user } });
         return u;
       });
-      return toApiPallet(updated);
+      return toApiPallet(updated, await this.presentationOf(updated.presentationId));
     } catch (e) {
       if (isUniqueViolation(e)) throw new ConflictException('Esa posición ya está ocupada por otro pallet.');
       throw e;
@@ -89,14 +95,15 @@ export class PalletsService {
 
   async unplace(id: number, user: string) {
     const pallet = await this.getActive(id);
-    if (pallet.rackId == null) return toApiPallet(pallet);
+    const presentation = await this.presentationOf(pallet.presentationId);
+    if (pallet.rackId == null) return toApiPallet(pallet, presentation);
     const fromText = await this.locText(pallet.rackId, pallet.level!, pallet.pos!);
     const updated = await this.prisma.$transaction(async (tx) => {
       const u = await tx.pallet.update({ where: { id }, data: { rackId: null, level: null, pos: null } });
       await tx.movement.create({ data: { palletId: id, type: 'ubicacion', fromText, toText: null, user } });
       return u;
     });
-    return toApiPallet(updated);
+    return toApiPallet(updated, presentation);
   }
 
   async baja(id: number, user: string) {
@@ -115,9 +122,17 @@ export class PalletsService {
     return p;
   }
 
-  private async ensureProduct(productId: number) {
-    const product = await this.prisma.product.findUnique({ where: { id: productId } });
-    if (!product) throw new BadRequestException('El producto indicado no existe.');
+  /** La presentación debe existir y pertenecer al producto indicado. */
+  private async ensurePresentation(productId: number, presentationId: number) {
+    const presentation = await this.prisma.presentation.findUnique({ where: { id: presentationId } });
+    if (!presentation || presentation.productId !== productId) {
+      throw new BadRequestException('La presentación no pertenece al producto elegido.');
+    }
+    return presentation;
+  }
+
+  private presentationOf(id: number | null) {
+    return id == null ? Promise.resolve(null) : this.prisma.presentation.findUnique({ where: { id } });
   }
 
   private async locText(rackId: number, level: number, pos: number) {

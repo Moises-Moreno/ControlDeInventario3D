@@ -14,16 +14,41 @@ datasource db {
 }
 
 model Product {
-  id          Int      @id @default(autoincrement())
-  code        String   @unique
-  name        String
-  unitsPerBox Int      @map("units_per_box")
-  color       String
-  example     Boolean  @default(false)
-  createdAt   DateTime @default(now()) @map("created_at")
-  pallets     Pallet[]
+  id            Int            @id @default(autoincrement())
+  /// Id / código del producto (único, en mayúsculas).
+  code          String         @unique
+  name          String
+  /// Unidad de medida del contenido: L, kg, un...
+  unit          String         @default("un")
+  /// Foto del producto (data URL JPEG reducida).
+  photo         String?
+  color         String
+  active        Boolean        @default(true)
+  example       Boolean        @default(false)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  presentations Presentation[]
+  pallets       Pallet[]
 
   @@map("products")
+}
+
+/// Forma en que viene el producto: contenido por envase, envases por caja y
+/// cómo se arma un pallet completo (frente × fondo × niveles).
+model Presentation {
+  id             Int             @id @default(autoincrement())
+  productId      Int             @map("product_id")
+  product        Product         @relation(fields: [productId], references: [id])
+  name           String
+  contentPerUnit Float           @default(1) @map("content_per_unit")
+  unitsPerBox    Int             @map("units_per_box")
+  front          Int             @default(5)
+  depth          Int             @default(2)
+  levels         Int             @default(4)
+  active         Boolean         @default(true)
+  pallets        Pallet[]
+  lines          ReceptionLine[]
+
+  @@map("presentations")
 }
 
 model Rack {
@@ -42,6 +67,10 @@ model Pallet {
   code      String?    @unique
   productId Int        @map("product_id")
   product   Product    @relation(fields: [productId], references: [id])
+  presentationId Int?  @map("presentation_id")
+  presentation   Presentation? @relation(fields: [presentationId], references: [id])
+  receptionId    Int?  @map("reception_id")
+  reception      Reception?    @relation(fields: [receptionId], references: [id])
   front     Int
   depth     Int
   rows      Int
@@ -87,4 +116,50 @@ model Movement {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("movements")
+}
+
+/// Recepción de mercadería. Las recepciones no se borran: se anulan.
+model Reception {
+  id           Int              @id @default(autoincrement())
+  code         String           @unique
+  /// confirmada | anulada
+  status       String           @default("confirmada")
+  receivedAt   DateTime         @default(now()) @map("received_at")
+  /// Usuario que registró la recepción.
+  user         String
+  /// Firma de quien recepciona (data URL PNG).
+  signature    String?
+  observations String           @default("")
+  photos       ReceptionPhoto[]
+  lines        ReceptionLine[]
+  pallets      Pallet[]
+
+  @@map("receptions")
+}
+
+model ReceptionPhoto {
+  id          Int       @id @default(autoincrement())
+  receptionId Int       @map("reception_id")
+  reception   Reception @relation(fields: [receptionId], references: [id])
+  /// Foto del estado de la mercadería (data URL JPEG reducida).
+  data        String
+
+  @@map("reception_photos")
+}
+
+model ReceptionLine {
+  id             Int          @id @default(autoincrement())
+  receptionId    Int          @map("reception_id")
+  reception      Reception    @relation(fields: [receptionId], references: [id])
+  presentationId Int          @map("presentation_id")
+  presentation   Presentation @relation(fields: [presentationId], references: [id])
+  /// Cantidad recibida en la unidad de medida del producto (p. ej. 5000 L).
+  quantity       Float
+  boxes          Int
+  /// Envases que sobraron y no completan una caja.
+  leftoverUnits  Int          @default(0) @map("leftover_units")
+  lote           String       @default("")
+  vence          String       @default("")
+
+  @@map("reception_lines")
 }

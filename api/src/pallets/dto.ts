@@ -6,6 +6,10 @@ export class CreatePalletDto {
   @IsInt()
   productId!: number;
 
+  @ApiProperty({ example: 1, description: 'Presentación del producto (un pallet no mezcla presentaciones).' })
+  @IsInt()
+  presentationId!: number;
+
   @ApiProperty({ example: 3, minimum: 1, maximum: 6 })
   @IsInt() @Min(1) @Max(6)
   front!: number;

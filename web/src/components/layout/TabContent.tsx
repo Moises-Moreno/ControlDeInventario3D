@@ -1,3 +1,4 @@
+import { ReceptionPanel } from '@/components/ReceptionPanel'
 import { BuilderPanel } from '@/components/BuilderPanel'
 import { ProductsPanel } from '@/components/ProductsPanel'
 import { WarehousePanel } from '@/components/WarehousePanel'
@@ -9,6 +10,8 @@ import { useUi } from '@/store/ui'
 export function TabContent() {
   const tab = useUi((s) => s.tab)
   switch (tab) {
+    case 'recepcion':
+      return <ReceptionPanel />
     case 'armar':
       return <BuilderPanel />
     case 'productos':

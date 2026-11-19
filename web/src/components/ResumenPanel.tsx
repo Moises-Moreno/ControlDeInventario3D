@@ -5,7 +5,7 @@ import { featuresApi, useStock } from '@/api/features'
 import { ApiError } from '@/api/client'
 import { useAuth } from '@/store/auth'
 
-const fmt = (n: number) => n.toLocaleString('es-BO')
+const fmt = (n: number) => n.toLocaleString('es-BO', { maximumFractionDigits: 2 })
 const fmtDate = (iso: string) => iso.split('-').reverse().join('/')
 
 function venceLabel(daysLeft: number): { text: string; tone: string } {
@@ -93,7 +93,7 @@ export function ResumenPanel() {
           <Tile label="Productos" value={fmt(data.totals.products)} />
           <Tile label="Pallets" value={fmt(data.totals.pallets)} />
           <Tile label="Cajas" value={fmt(data.totals.boxes)} />
-          <Tile label="Unidades" value={fmt(data.totals.units)} />
+          <Tile label="Envases" value={fmt(data.totals.units)} />
         </div>
       )}
 
@@ -112,7 +112,9 @@ export function ResumenPanel() {
               <span className="text-right leading-tight">
                 <span className="text-lg font-semibold tabular-nums">{fmt(r.boxes)}</span>
                 <small className="block text-[11px] font-medium text-muted-foreground">
-                  {fmt(r.units)} u · {r.pallets} {r.pallets === 1 ? 'pallet' : 'pallets'}
+                  {fmt(r.volume)} {r.unit} · {fmt(r.units)} envases
+                  <br />
+                  {r.fullPallets} {r.fullPallets === 1 ? 'completo' : 'completos'} · {r.partialPallets} {r.partialPallets === 1 ? 'mermado' : 'mermados'}
                 </small>
               </span>
             </li>

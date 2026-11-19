@@ -1,15 +1,16 @@
 import { useEffect, useMemo } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { Line, OrbitControls } from '@react-three/drei'
 import { GridHelper, LineBasicMaterial } from 'three'
-import { levelHeight, productById, palletAt, type Loc, type Rack, type Pallet, type Product } from '@/domain/inventory'
+import { levelHeight, productById, palletAt, sameLoc, type Loc, type Rack, type Pallet, type Product } from '@/domain/inventory'
+import { CELL, buildPlan, type WarehousePlan } from '@/domain/warehousePlan'
 import { useInventory } from '@/store/inventory'
 import { useUi } from '@/store/ui'
 import { useTheme } from '@/store/theme'
 import { useScene } from '@/store/scene'
 import { sceneColors } from './palette'
-import { CELL, rackZ, warehouseDims } from './warehouseLayout'
 import { MiniPallet } from './MiniPallet'
+import { Label3D } from './Label3D'
 import { useCameraFraming } from './framing'
 
 /** Encuadra el almacén completo; se reencuadra al pedir "Vista inicial" o al cambiar sus medidas. */
@@ -18,12 +19,13 @@ function WarehouseCamera({ len, depth, height }: { len: number; depth: number; h
 
   useCameraFraming(
     () => ({
-      // Semidiagonal de la caja que envuelve a todos los racks.
-      radius: 0.5 * Math.hypot(len, depth, height),
-      target: [0, height * 0.35, 0],
-      dir: [0.5, 0.5, 0.85],
+      // Algo menos que la semidiagonal de la caja que envuelve a los racks: el plano es plano y
+      // desde arriba no ocupa toda la esfera.
+      radius: 0.4 * Math.hypot(len, depth, height),
+      target: [0, height * 0.3, 0],
+      dir: [0.35, 0.7, 0.75],
     }),
-    `${frameNonce}|${len}|${depth}|${height.toFixed(2)}`,
+    `${frameNonce}|${len.toFixed(1)}|${depth.toFixed(1)}|${height.toFixed(2)}`,
   )
 
   return null
@@ -43,6 +45,16 @@ function Grid() {
   return <primitive object={grid} position={[0, 0.001, 0]} />
 }
 
+interface SceneColors {
+  post: string
+  beam: string
+  green: string
+  accent: string
+  grid: string
+  guide: string
+  aisle: string
+}
+
 export function WarehouseScene() {
   const racks = useInventory((s) => s.racks)
   const pallets = useInventory((s) => s.pallets)
@@ -52,19 +64,24 @@ export function WarehouseScene() {
   const setPlacing = useUi((s) => s.setPlacing)
   const selectedSlot = useUi((s) => s.selectedSlot)
   const selectSlot = useUi((s) => s.selectSlot)
+  const guideLocs = useUi((s) => s.guideLocs)
+  const route = useUi((s) => s.route)
   const theme = useTheme((s) => s.theme)
 
   const H = levelHeight(pallets)
-  const n = racks.length
-  const dims = warehouseDims(racks, H)
+  const plan = useMemo(() => buildPlan(racks), [racks])
   const placing = placingId != null
+  const maxLevels = Math.max(1, ...racks.map((r) => r.levels))
+  const height = maxLevels * H
 
-  const colors = {
+  const colors: SceneColors = {
     post: '#2f55c8',
     beam: '#e0731c',
     green: theme === 'dark' ? '#5fd08a' : '#1b7f47',
     accent: theme === 'dark' ? '#7d9bff' : '#2447c9',
     grid: sceneColors(theme).grid,
+    guide: '#f59e0b',
+    aisle: theme === 'dark' ? '#cbd5e1' : '#64748b',
   }
 
   async function pick(slot: Loc) {
@@ -79,7 +96,9 @@ export function WarehouseScene() {
     selectSlot({ ...slot })
   }
 
-  const R = Math.max(dims.maxLen, dims.depth, dims.height)
+  const R = Math.max(plan.width, plan.height, height)
+  // Los racks se dibujan en coordenadas del plano; el grupo los centra en el origen.
+  const offset: [number, number, number] = [-plan.width / 2, 0, -plan.height / 2]
 
   return (
     <Canvas shadows dpr={[1, 2]} gl={{ antialias: true, alpha: true }} camera={{ fov: 40, near: 0.1, far: 400, position: [6, 6, 8] }}>
@@ -101,24 +120,44 @@ export function WarehouseScene() {
       </mesh>
       <Grid />
 
-      <group position={[dims.offsetX, 0, dims.offsetZ]}>
-        {racks.map((r, ri) => (
-          <RackGroup
-            key={r.id}
-            rack={r}
-            z0={rackZ(ri, n)}
-            H={H}
-            placing={placing}
-            colors={colors}
-            pallets={pallets}
-            products={products}
-            onPick={pick}
-          />
-        ))}
+      <group position={offset}>
+        <Aisles plan={plan} color={colors.aisle} />
+        <Entries plan={plan} />
 
-        {selectedSlot && (
-          <SelectionBox slot={selectedSlot} racks={racks} n={n} H={H} color={colors.accent} />
-        )}
+        {racks.map((r) => {
+          const rp = plan.racks.find((x) => x.rackId === r.id)
+          if (!rp) return null
+          return (
+            <RackGroup
+              key={r.id}
+              rack={r}
+              x0={plan.x0}
+              z0={rp.v0 + CELL.d / 2}
+              H={H}
+              placing={placing}
+              colors={colors}
+              pallets={pallets}
+              products={products}
+              guideLocs={guideLocs}
+              onPick={pick}
+            />
+          )
+        })}
+
+        {selectedSlot && <SelectionBox slot={selectedSlot} plan={plan} H={H} color={colors.accent} />}
+
+        {route &&
+          route.legs.map((leg, i) => (
+            <Line
+              key={i}
+              points={leg.points.map((p) => [p.x, 0.08, p.v] as [number, number, number])}
+              color={colors.guide}
+              lineWidth={4}
+              dashed
+              dashSize={0.5}
+              gapSize={0.25}
+            />
+          ))}
       </group>
 
       <OrbitControls
@@ -129,29 +168,75 @@ export function WarehouseScene() {
         minDistance={2}
         maxDistance={90}
       />
-      <WarehouseCamera len={dims.maxLen} depth={dims.depth} height={dims.height} />
+      <WarehouseCamera len={plan.width} depth={plan.height} height={height} />
     </Canvas>
+  )
+}
+
+/** Piso de los pasillos (anillo alrededor de B+C), un poco más oscuro que el resto. */
+function Aisles({ plan, color }: { plan: WarehousePlan; color: string }) {
+  if (!plan.aisles.length) return null
+  const first = plan.aisles[0]
+  const last = plan.aisles[plan.aisles.length - 1]
+  const laneH = 2.8
+  return (
+    <group>
+      {plan.aisles.map((v, i) => (
+        <mesh key={i} rotation-x={-Math.PI / 2} position={[plan.width / 2, 0.004, v]}>
+          <planeGeometry args={[plan.width - 0.4, laneH]} />
+          <meshBasicMaterial color={color} transparent opacity={0.16} depthWrite={false} />
+        </mesh>
+      ))}
+      {[plan.xLeft, plan.xRight].map((x) => (
+        <mesh key={x} rotation-x={-Math.PI / 2} position={[x, 0.004, (first + last) / 2]}>
+          <planeGeometry args={[laneH, last - first + laneH]} />
+          <meshBasicMaterial color={color} transparent opacity={0.16} depthWrite={false} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+/** Marcas de los ingresos: el principal en verde y el cerrado en rojo. */
+function Entries({ plan }: { plan: WarehousePlan }) {
+  return (
+    <group>
+      {plan.entries.map((e) =>
+        e.open ? (
+          <Label3D key={e.id} text="INGRESO" shape="pill" size={0.55} bg="#16a34a" position={[e.x + 0.9, 0.5, e.v]} />
+        ) : (
+          // Ingreso cerrado: solo una franja roja sobre la pared.
+          <mesh key={e.id} position={[e.x, 0.6, e.v]}>
+            <boxGeometry args={[0.12, 1.2, 2.2]} />
+            <meshBasicMaterial color="#dc2626" />
+          </mesh>
+        ),
+      )}
+    </group>
   )
 }
 
 interface RackProps {
   rack: Rack
+  x0: number
   z0: number
   H: number
   placing: boolean
-  colors: { post: string; beam: string; green: string; accent: string; grid: string }
+  colors: SceneColors
   pallets: Pallet[]
   products: Product[]
+  guideLocs: Loc[]
   onPick: (slot: Loc) => void
 }
 
-function RackGroup({ rack, z0, H, placing, colors, pallets, products, onPick }: RackProps) {
+function RackGroup({ rack, x0, z0, H, placing, colors, pallets, products, guideLocs, onPick }: RackProps) {
   const len = rack.positions * CELL.w
   const height = (rack.levels - 1) * H + 1.15
   const zo = CELL.d / 2 - 0.045
+  const top = height + 0.25
 
   const posts: number[] = []
-  for (let k = 0; k <= rack.positions; k++) posts.push(k * CELL.w)
+  for (let k = 0; k <= rack.positions; k++) posts.push(x0 + k * CELL.w)
 
   const beams: number[] = []
   for (let L = 2; L <= rack.levels; L++) beams.push((L - 1) * H - 0.05)
@@ -159,7 +244,7 @@ function RackGroup({ rack, z0, H, placing, colors, pallets, products, onPick }: 
   const cells: { loc: Loc; cx: number; y0: number }[] = []
   for (let L = 1; L <= rack.levels; L++) {
     for (let P = 1; P <= rack.positions; P++) {
-      cells.push({ loc: { rackId: rack.id, level: L, pos: P }, cx: (P - 0.5) * CELL.w, y0: (L - 1) * H })
+      cells.push({ loc: { rackId: rack.id, level: L, pos: P }, cx: x0 + (P - 0.5) * CELL.w, y0: (L - 1) * H })
     }
   }
 
@@ -181,19 +266,21 @@ function RackGroup({ rack, z0, H, placing, colors, pallets, products, onPick }: 
       {/* Vigas */}
       {beams.map((y, i) => (
         <group key={`b-${i}`}>
-          <mesh position={[len / 2, y, z0 - zo]} castShadow>
+          <mesh position={[x0 + len / 2, y, z0 - zo]} castShadow>
             <boxGeometry args={[len, 0.1, 0.06]} />
             <meshStandardMaterial color={colors.beam} roughness={0.6} />
           </mesh>
-          <mesh position={[len / 2, y, z0 + zo]} castShadow>
+          <mesh position={[x0 + len / 2, y, z0 + zo]} castShadow>
             <boxGeometry args={[len, 0.1, 0.06]} />
             <meshStandardMaterial color={colors.beam} roughness={0.6} />
           </mesh>
         </group>
       ))}
+
       {/* Posiciones */}
       {cells.map(({ loc, cx, y0 }) => {
         const occ = palletAt(pallets, loc)
+        const guided = guideLocs.some((g) => sameLoc(g, loc))
         return (
           <group key={`${loc.level}-${loc.pos}`}>
             {/* Zona clickeable */}
@@ -230,22 +317,51 @@ function RackGroup({ rack, z0, H, placing, colors, pallets, products, onPick }: 
                 />
               </mesh>
             )}
+
+            {/* Posición sugerida / de la ruta: se resalta con un volumen ámbar */}
+            {guided && (
+              <mesh position={[cx, y0 + (H - 0.1) / 2, z0]}>
+                <boxGeometry args={[CELL.w - 0.04, H - 0.08, CELL.d + 0.05]} />
+                <meshBasicMaterial color={colors.guide} transparent opacity={0.35} depthWrite={false} />
+              </mesh>
+            )}
           </group>
         )
       })}
 
+      {/* Rótulos: nombre del rack, número de fila (arriba) y nivel (extremo izquierdo) */}
+      <Label3D text={rack.name} position={[x0 - 0.7, top, z0]} size={0.9} bg={colors.accent} />
+      {Array.from({ length: rack.positions }, (_, i) => (
+        <Label3D
+          key={`f${i}`}
+          text={String(i + 1).padStart(3, '0')}
+          shape="pill"
+          size={0.34}
+          bg="#334155"
+          position={[x0 + (i + 0.5) * CELL.w, top, z0]}
+        />
+      ))}
+      {Array.from({ length: rack.levels }, (_, i) => (
+        <Label3D
+          key={`n${i}`}
+          text={`N${i + 1}`}
+          shape="pill"
+          size={0.3}
+          bg="#0f766e"
+          position={[x0 - 0.3, i * H + (H - 0.1) / 2, z0]}
+        />
+      ))}
     </group>
   )
 }
 
-function SelectionBox({ slot, racks, n, H, color }: { slot: Loc; racks: Rack[]; n: number; H: number; color: string }) {
-  const ri = racks.findIndex((r) => r.id === slot.rackId)
-  if (ri < 0) return null
-  const z0 = rackZ(ri, n)
-  const cx = (slot.pos - 0.5) * CELL.w
+function SelectionBox({ slot, plan, H, color }: { slot: Loc; plan: WarehousePlan; H: number; color: string }) {
+  const rp = plan.racks.find((r) => r.rackId === slot.rackId)
+  if (!rp) return null
+  const cx = plan.x0 + (slot.pos - 0.5) * CELL.w
   const y = (slot.level - 1) * H + (H - 0.1) / 2
   return (
-    <mesh position={[cx, y, z0]}>
+    <mesh position={[cx, y, rp.v0 + CELL.d / 2]}>
       <boxGeometry args={[CELL.w - 0.06, H - 0.1, CELL.d + 0.06]} />
       <meshBasicMaterial color={color} transparent opacity={0.16} depthWrite={false} />
     </mesh>

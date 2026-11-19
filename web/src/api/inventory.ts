@@ -2,15 +2,32 @@ import { api } from './client'
 import type { Product, Pallet, Rack, Loc } from '@/domain/inventory'
 import type { PalletBuild } from '@/domain/pallet'
 
+export interface PresentationInput {
+  /** Presente si se edita una presentación existente. */
+  id?: number
+  name: string
+  contentPerUnit: number
+  unitsPerBox: number
+  front: number
+  depth: number
+  levels: number
+  active: boolean
+}
+
 export interface ProductInput {
   code: string
   name: string
-  unitsPerBox: number
+  unit: string
   color: string
+  /** Foto (data URL), null para quitarla o undefined para no tocarla. */
+  photo?: string | null
+  active: boolean
+  presentations: PresentationInput[]
 }
 
 export interface PalletInput extends PalletBuild {
   productId: number
+  presentationId: number
   lote: string
   vence: string
 }

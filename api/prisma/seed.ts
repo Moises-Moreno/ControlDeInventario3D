@@ -1,9 +1,27 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
+/**
+ * Datos base del almacén. Es idempotente: se puede correr sobre una base vacía o
+ * sobre una con datos, y nunca borra ni pisa lo que ya existe.
+ */
 const prisma = new PrismaClient();
 
-const palCode = (n: number) => 'PAL-' + String(n).padStart(3, '0');
+// Almacén: 4 racks (A, B+C pegados en el centro, D), cada uno de 6 filas × 4 niveles.
+const RACKS = ['A', 'B', 'C', 'D'];
+const FILAS = 6;
+const NIVELES = 4;
+
+const PRODUCTS = [
+  {
+    code: 'LAV-001', name: 'Lavandina', unit: 'L', color: '#5fa8d3',
+    presentations: [{ name: 'Envase 5 L', contentPerUnit: 5, unitsPerBox: 4, front: 5, depth: 2, levels: 4 }],
+  },
+  {
+    code: 'JAB-001', name: 'Jabón en barra', unit: 'un', color: '#e8d9a8',
+    presentations: [{ name: 'Barra 200 g', contentPerUnit: 1, unitsPerBox: 24, front: 4, depth: 4, levels: 5 }],
+  },
+];
 
 async function seedUsers() {
   if ((await prisma.user.count()) > 0) return;
@@ -12,45 +30,41 @@ async function seedUsers() {
   console.log('Usuarios de ejemplo: admin/admin123 (admin) y operador/operador123 (operador).');
 }
 
-async function main() {
-  await seedUsers();
-
-  if ((await prisma.product.count()) > 0) {
-    console.log('Ya hay datos de inventario; no se vuelve a sembrar.');
-    return;
+async function seedRacks() {
+  for (const name of RACKS) {
+    const rack = await prisma.rack.findUnique({ where: { name } });
+    if (!rack) {
+      await prisma.rack.create({ data: { name, levels: NIVELES, positions: FILAS } });
+      console.log(`Rack ${name} creado (${FILAS} filas × ${NIVELES} niveles).`);
+    } else if (rack.levels < NIVELES || rack.positions < FILAS) {
+      // Solo se agranda: así nunca se pierde una posición ocupada.
+      await prisma.rack.update({
+        where: { name },
+        data: { levels: Math.max(rack.levels, NIVELES), positions: Math.max(rack.positions, FILAS) },
+      });
+      console.log(`Rack ${name} ampliado a ${Math.max(rack.positions, FILAS)} filas × ${Math.max(rack.levels, NIVELES)} niveles.`);
+    }
   }
+}
 
-  const gal = await prisma.product.create({ data: { code: 'GAL-012', name: 'Galletas de avena 200 g', unitsPerBox: 24, color: '#c89a5a', example: true } });
-  const ace = await prisma.product.create({ data: { code: 'ACE-005', name: 'Aceite vegetal 900 ml', unitsPerBox: 12, color: '#d8b24a', example: true } });
-  await prisma.product.create({ data: { code: 'DET-030', name: 'Detergente en polvo 1 kg', unitsPerBox: 10, color: '#7fa3c7', example: true } });
-
-  const a = await prisma.rack.create({ data: { name: 'A', levels: 3, positions: 4 } });
-  await prisma.rack.create({ data: { name: 'B', levels: 3, positions: 4 } });
-  await prisma.rack.create({ data: { name: 'C', levels: 3, positions: 4 } });
-  await prisma.rack.create({ data: { name: 'D', levels: 3, positions: 4 } });
-
-  async function pallet(data: {
-    productId: number; front: number; depth: number; rows: number; loose: number;
-    lote?: string; vence?: string; rackId?: number; level?: number; pos?: number;
-  }) {
-    const created = await prisma.pallet.create({
+async function seedProducts() {
+  for (const p of PRODUCTS) {
+    if (await prisma.product.findUnique({ where: { code: p.code } })) continue;
+    await prisma.product.create({
       data: {
-        productId: data.productId,
-        front: data.front, depth: data.depth, rows: data.rows, loose: data.loose,
-        lote: data.lote ?? '', vence: data.vence ?? '',
-        rackId: data.rackId ?? null, level: data.level ?? null, pos: data.pos ?? null,
+        code: p.code, name: p.name, unit: p.unit, color: p.color,
+        presentations: { create: p.presentations },
       },
     });
-    await prisma.pallet.update({ where: { id: created.id }, data: { code: palCode(created.id) } });
-    await prisma.movement.create({ data: { palletId: created.id, type: 'alta' } });
-    if (data.rackId) await prisma.movement.create({ data: { palletId: created.id, type: 'ubicacion', toText: `A-N${data.level}-P${data.pos}` } });
+    console.log(`Producto ${p.code} (${p.name}) creado.`);
   }
+}
 
-  await pallet({ productId: gal.id, front: 3, depth: 2, rows: 3, loose: 4, lote: 'L-2611', vence: '2027-05-30', rackId: a.id, level: 1, pos: 1 });
-  await pallet({ productId: ace.id, front: 2, depth: 2, rows: 4, loose: 0, rackId: a.id, level: 2, pos: 3 });
-  await pallet({ productId: gal.id, front: 3, depth: 2, rows: 2, loose: 0, lote: 'L-2609', vence: '2027-03-15' });
-
-  console.log('Datos de ejemplo cargados.');
+async function main() {
+  await seedUsers();
+  await seedRacks();
+  await seedProducts();
+  console.log('Datos base listos.');
 }
 
 main()

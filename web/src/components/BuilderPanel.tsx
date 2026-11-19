@@ -3,7 +3,7 @@ import { useBuilder } from '@/store/builder'
 import { useInventory } from '@/store/inventory'
 import { useUi } from '@/store/ui'
 import { LIMITS, maxLoose, totals } from '@/domain/pallet'
-import { productById, locCode, type Pallet } from '@/domain/inventory'
+import { productById, locCode, compositionLabel, boxesPerPallet, type Pallet } from '@/domain/inventory'
 import { Stepper } from './Stepper'
 
 const fmt = (n: number) => n.toLocaleString('es-BO')
@@ -18,20 +18,32 @@ export function BuilderPanel() {
   const editProduct = useUi((s) => s.editProduct)
 
   const product = productById(products, b.productId)
-  const t = totals({ front: b.front, depth: b.depth, rows: b.rows, loose: b.loose }, product?.unitsPerBox ?? 0)
+  const presentations = product?.presentations.filter((x) => x.active || x.id === b.presentationId) ?? []
+  const presentation = presentations.find((x) => x.id === b.presentationId) ?? null
+  const t = totals({ front: b.front, depth: b.depth, rows: b.rows, loose: b.loose }, presentation?.unitsPerBox ?? 0)
+  const volume = presentation && product ? t.units * presentation.contentPerUnit : 0
   const looseMax = maxLoose(b.front, b.depth)
 
   // Si no hay producto elegido pero existe catálogo, usa el primero.
   useEffect(() => {
-    if (b.productId == null && products.length) b.set({ productId: products[0].id })
+    if (b.productId == null && products.length) b.set({ productId: (products.find((p) => p.active) ?? products[0]).id })
   }, [b, products])
+
+  // La presentación debe ser una de las del producto elegido.
+  useEffect(() => {
+    if (!product) return
+    if (!product.presentations.some((x) => x.id === b.presentationId)) {
+      const first = product.presentations.find((x) => x.active) ?? product.presentations[0]
+      if (first) b.set({ presentationId: first.id })
+    }
+  }, [b, product])
 
   const editing = b.editingId != null && pallets.some((p) => p.id === b.editingId)
 
   const save = async () => {
-    if (b.productId == null) return
+    if (b.productId == null || b.presentationId == null) return
     const id = await savePallet(
-      { productId: b.productId, front: b.front, depth: b.depth, rows: b.rows, loose: b.loose, lote: b.lote, vence: b.vence },
+      { productId: b.productId, presentationId: b.presentationId, front: b.front, depth: b.depth, rows: b.rows, loose: b.loose, lote: b.lote, vence: b.vence },
       b.editingId,
     )
     if (id != null) useBuilder.setState({ editingId: id })
@@ -49,22 +61,44 @@ export function BuilderPanel() {
           <select
             value={b.productId ?? ''}
             disabled={!products.length}
-            onChange={(e) => b.set({ productId: Number(e.target.value) })}
-            className="h-9 w-full rounded-md border border-border bg-secondary px-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            onChange={(e) => b.set({ productId: Number(e.target.value), presentationId: null })}
+            className="h-11 w-full rounded-xl border border-border bg-secondary px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           >
-            {products.map((p) => (
+            {products.filter((p) => p.active || p.id === b.productId).map((p) => (
               <option key={p.id} value={p.id}>
-                {p.code} · {p.name}
+                {p.code} · {p.name}{p.active ? '' : ' (inactivo)'}
               </option>
             ))}
           </select>
         </label>
 
+        {product && (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">Presentación</span>
+            <select
+              value={b.presentationId ?? ''}
+              onChange={(e) => b.set({ presentationId: Number(e.target.value) })}
+              className="h-11 w-full rounded-xl border border-border bg-secondary px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {presentations.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         {product ? (
           <div className="flex items-center gap-2.5 rounded-md border border-border p-2.5 text-sm">
             <span className="size-7 rounded border border-border" style={{ background: product.color }} />
             <div>
-              <strong>{fmt(product.unitsPerBox)} unidades por caja</strong>
+              <strong>{presentation ? compositionLabel(presentation, product.unit) : product.name}</strong>
+              {presentation && (
+                <span className="block text-xs text-muted-foreground">
+                  Pallet completo: {boxesPerPallet(presentation)} cajas ({presentation.front} × {presentation.depth} × {presentation.levels} niveles)
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => editProduct(product.id)}
@@ -129,7 +163,7 @@ export function BuilderPanel() {
             {fmt(t.boxes)} <span className="text-lg font-medium text-muted-foreground">cajas</span>
           </div>
           <div className="text-sm tabular-nums">
-            {product ? `${fmt(t.boxes)} cajas × ${fmt(product.unitsPerBox)} u = ${fmt(t.units)} unidades` : 'Elige un producto para ver las unidades.'}
+            {product && presentation ? `${fmt(t.boxes)} cajas × ${fmt(presentation.unitsPerBox)} envases = ${fmt(t.units)} envases · ${fmt(volume)} ${product.unit}` : 'Elige un producto para ver las unidades.'}
           </div>
         </div>
 
@@ -137,7 +171,7 @@ export function BuilderPanel() {
           <button
             type="button"
             onClick={save}
-            disabled={!product}
+            disabled={!product || !presentation}
             className="h-10 flex-1 rounded-md bg-primary font-semibold text-primary-foreground hover:brightness-110 disabled:opacity-50"
           >
             {editing ? 'Guardar cambios' : 'Guardar pallet'}

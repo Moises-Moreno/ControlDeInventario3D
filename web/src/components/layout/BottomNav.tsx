@@ -12,7 +12,7 @@ export function BottomNav() {
       aria-label="Secciones"
       className="shrink-0 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
     >
-      <ul className="mx-auto grid max-w-2xl grid-cols-5">
+      <ul className="mx-auto grid max-w-2xl grid-cols-6">
         {NAV.map(({ id, label, icon: Icon }) => {
           const active = tab === id
           return (
@@ -22,13 +22,13 @@ export function BottomNav() {
                 onClick={() => setTab(id)}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex h-16 w-full flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                  'flex h-16 w-full flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                   active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
                 )}
               >
                 <span
                   className={cn(
-                    'flex h-8 w-14 items-center justify-center rounded-full transition-colors',
+                    'flex h-8 w-12 items-center justify-center rounded-full transition-colors',
                     active && 'bg-primary/15',
                   )}
                 >

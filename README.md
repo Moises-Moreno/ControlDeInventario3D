@@ -27,7 +27,8 @@ esquema de Prisma sirve para PostgreSQL en producción: se cambia `provider` a
 cd api
 cp .env.example .env
 npm install
-npx prisma migrate dev   # crea la base SQLite y la siembra con datos de ejemplo
+npx prisma migrate deploy   # crea/actualiza la base SQLite
+node prisma/seed.ts         # usuarios, 4 racks (6 filas × 4 niveles) y productos base (no pisa lo existente)
 npm run start:dev
 ```
 
@@ -58,3 +59,20 @@ npm run dev
 
 - Interfaz y mensajes en español; tema claro y oscuro; pensado también para teléfono.
 - La validación autoritativa vive en la API; el frontend la repite solo como ayuda de UX.
+
+## Cómo funciona el almacén
+
+- **Productos:** id, nombre, foto, unidad de medida, activo/inactivo y una o más **presentaciones**.
+  Cada presentación define el contenido por envase, los envases por caja y cómo se arma un
+  **pallet completo** (frente × fondo × niveles). Ej.: Lavandina, envase de 5 L, 4 por caja,
+  pallet de 5 × 2 × 4 = 40 cajas.
+- **Recepción:** se carga la cantidad (en litros, cajas o envases) y el sistema calcula las cajas y los
+  pallets (completos + un mermado). Lleva fecha, usuario, observaciones, fotos opcionales y firma de quien
+  recepciona. Las recepciones no se borran: se anulan (solo admin).
+- **Ubicación sugerida:** pallets mermados en los niveles de abajo, completos arriba, el mismo producto
+  junto y lo más cerca del ingreso. Muestra el código de la posición, un mapa con el recorrido y las
+  indicaciones paso a paso.
+- **Códigos:** posición `A-F001-N1` = rack A, fila 001, nivel 1. Pallets `PAL-001`, recepciones `REC-0001`.
+- **Plano:** A arriba, B y C pegados al centro, D abajo; pasillo en anillo con sentido de circulación;
+  ingreso principal abajo a la izquierda (el de la derecha está cerrado). Se ajusta en
+  `web/src/domain/warehousePlan.ts`.

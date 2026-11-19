@@ -1,10 +1,14 @@
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Las recepciones llevan fotos y firma (data URL): el límite por defecto (100 kb) se queda corto.
+  app.useBodyParser('json', { limit: '12mb' });
 
   // Todas las rutas quedan bajo /api
   app.setGlobalPrefix('api');

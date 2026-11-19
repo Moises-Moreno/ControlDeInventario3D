@@ -18,9 +18,12 @@ const SUN_R = 3.5
 /** Encuadra la cámara al pallet al montar, en "Vista inicial" y cuando cambia el tamaño. */
 function CameraRig() {
   const frameNonce = useScene((s) => s.frameNonce)
+  // Al cambiar de pallet en la vista previa se reencuadra; con el armador manual no.
+  const previewHeight = useScene((s) => (s.preview ? `${s.preview.build.rows}/${s.preview.build.loose}` : ''))
 
   useCameraFraming(() => {
-    const { rows, loose } = useBuilder.getState()
+    const preview = useScene.getState().preview
+    const { rows, loose } = preview ? preview.build : useBuilder.getState()
     const layers = rows + (loose > 0 ? 1 : 0)
     const top = PALLET.h + BOX_H * Math.max(layers, 1)
     return {
@@ -29,7 +32,7 @@ function CameraRig() {
       target: [0, top * 0.45, 0],
       dir: [0.72, 0.48, 0.82],
     }
-  }, frameNonce)
+  }, `${frameNonce}|${previewHeight}`)
 
   return null
 }
@@ -56,8 +59,10 @@ export function BuilderScene() {
   const rows = useBuilder((s) => s.rows)
   const loose = useBuilder((s) => s.loose)
   const productId = useBuilder((s) => s.productId)
-  const color = useInventory((s) => productById(s.products, productId)?.color ?? '#c89a5a')
-  const build = { front, depth, rows, loose }
+  const productColor = useInventory((s) => productById(s.products, productId)?.color ?? '#c89a5a')
+  const preview = useScene((s) => s.preview)
+  const color = preview ? preview.color : productColor
+  const build = preview ? preview.build : { front, depth, rows, loose }
 
   return (
     <Canvas

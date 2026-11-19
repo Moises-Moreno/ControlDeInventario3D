@@ -4,7 +4,8 @@ import { useInventory } from '@/store/inventory'
 import { useUi } from '@/store/ui'
 import { useBuilder } from '@/store/builder'
 import { useAuth } from '@/store/auth'
-import { totals } from '@/domain/pallet'
+import { PlacementGuide } from '@/components/PlacementGuide'
+import { WarehouseMap } from '@/components/WarehouseMap'
 import {
   freeSlots,
   occupancy,
@@ -12,6 +13,7 @@ import {
   productById,
   locCode,
   describe,
+  presentationOf,
   MAX_RACKS,
   MAX_LEVELS,
   MAX_POS,
@@ -19,7 +21,6 @@ import {
   type Rack,
 } from '@/domain/inventory'
 
-const fmt = (n: number) => n.toLocaleString('es-BO')
 const fmtDate = (iso: string) => iso.split('-').reverse().join('/')
 
 export function WarehousePanel() {
@@ -35,6 +36,8 @@ export function WarehousePanel() {
   const setPlacing = useUi((s) => s.setPlacing)
   const selectedSlot = useUi((s) => s.selectedSlot)
   const selectSlot = useUi((s) => s.selectSlot)
+  const guideLocs = useUi((s) => s.guideLocs)
+  const route = useUi((s) => s.route)
   const setTab = useUi((s) => s.setTab)
   const loadBuilder = useBuilder((s) => s.load)
 
@@ -102,41 +105,33 @@ export function WarehousePanel() {
         </div>
       )}
 
+      {/* Plano del almacén */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Plano del almacén</h2>
+        <WarehouseMap
+          racks={racks}
+          pallets={pallets}
+          products={products}
+          selected={selectedSlot}
+          guideLocs={guideLocs}
+          route={route}
+          onSelectFila={(rackId, pos) => selectSlot({ rackId, level: 1, pos })}
+        />
+        <p className="text-xs text-muted-foreground">
+          Tocá una fila para ver su primer nivel. Cada fila se identifica como rack-fila-nivel, por ejemplo A-F001-N1.
+        </p>
+      </section>
+
       {/* Pallets sin ubicar */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">1 · Pallets sin ubicar</h2>
-        <ul className="flex flex-col gap-1.5">
-          {unplaced.map((p) => {
-            const pr = productById(products, p.productId)
-            return (
-              <li key={p.id} className={`grid grid-cols-[14px_1fr_auto_auto] items-center gap-2.5 rounded-md border p-2 ${p.id === placingId ? 'border-primary' : 'border-border'}`}>
-                <span className="size-3.5 rounded-sm border border-border" style={{ background: pr?.color ?? 'transparent' }} />
-                <div className="min-w-0">
-                  <span className="font-semibold tabular-nums">{p.pal}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{pr ? `${pr.code} · ${pr.name}` : 'Producto eliminado'}</span>
-                </div>
-                <span className="text-lg font-semibold tabular-nums">{fmt(totals(p).boxes)}</span>
-                <button
-                  type="button"
-                  disabled={p.id === placingId || !free.length}
-                  onClick={() => setPlacing(p.id)}
-                  className="h-8 rounded-md border border-border bg-card px-3 text-sm font-medium hover:bg-secondary disabled:opacity-50"
-                >
-                  {p.id === placingId ? 'Eligiendo' : 'Ubicar'}
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-        <p className="text-xs text-muted-foreground">
-          {unplaced.length
-            ? free.length
-              ? 'Pulsá Ubicar y luego tocá una posición libre del rack.'
-              : 'No quedan posiciones libres. Agregá niveles, posiciones o un rack.'
-            : pallets.length
-              ? 'Todos los pallets guardados están en el rack.'
-              : 'Aún no hay pallets. Armalos en la pestaña Armar pallet.'}
-        </p>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">1 · Pallets sin ubicar ({unplaced.length})</h2>
+        {unplaced.length ? (
+          <PlacementGuide palletIds={unplaced.map((p) => p.id)} />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {pallets.length ? 'Todos los pallets guardados están en el rack.' : 'Aún no hay pallets. Recibí mercadería en Recepción o armalos en la pestaña Armar.'}
+          </p>
+        )}
       </section>
 
       {/* Posición seleccionada */}
@@ -160,7 +155,7 @@ export function WarehousePanel() {
                   <p className="text-sm">
                     <strong>{occ.pal}</strong> · {productById(products, occ.productId)?.name ?? 'Producto eliminado'}
                   </p>
-                  <p className="text-sm">{describe(occ, productById(products, occ.productId)?.unitsPerBox ?? 0)}</p>
+                  <p className="text-sm">{describe(occ, presentationOf(products, occ), productById(products, occ.productId)?.unit)}</p>
                   {(occ.lote || occ.vence) && (
                     <p className="text-xs text-muted-foreground">
                       {occ.lote ? `Lote ${occ.lote}` : ''}
@@ -245,7 +240,7 @@ function RackEditor({ rack, onError, onDelete }: { rack: Rack; onError: (msg: st
       </div>
       <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3">
         <RackStepper rack={rack} field="levels" label="Niveles de alto" max={MAX_LEVELS} onError={onError} setRackSize={setRackSize} />
-        <RackStepper rack={rack} field="positions" label="Posiciones por nivel" max={MAX_POS} onError={onError} setRackSize={setRackSize} />
+        <RackStepper rack={rack} field="positions" label="Filas del rack" max={MAX_POS} onError={onError} setRackSize={setRackSize} />
       </div>
     </li>
   )

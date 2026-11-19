@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { boxesPerPallet } from '../common/planner.js';
 
 const EXPIRY_DAYS = 60; // "próximo a vencer" si vence dentro de este plazo
 
@@ -9,22 +10,40 @@ export class StockService {
 
   async summary() {
     const [products, pallets] = await Promise.all([
-      this.prisma.product.findMany({ orderBy: { id: 'asc' } }),
-      this.prisma.pallet.findMany({ where: { status: 'activo' } }),
+      this.prisma.product.findMany({ orderBy: { id: 'asc' }, include: { presentations: true } }),
+      this.prisma.pallet.findMany({ where: { status: 'activo' }, include: { presentation: true } }),
     ]);
 
     const rows = products.map((p) => {
       const own = pallets.filter((x) => x.productId === p.id);
-      const boxes = own.reduce((s, x) => s + (x.front * x.depth * x.rows + x.loose), 0);
+      let boxes = 0;
+      let units = 0; // envases
+      let volume = 0; // en la unidad del producto (L, kg...)
+      let full = 0;
+      let partial = 0;
+      for (const x of own) {
+        const b = x.front * x.depth * x.rows + x.loose;
+        const per = x.presentation?.unitsPerBox ?? 1;
+        const content = x.presentation?.contentPerUnit ?? 1;
+        boxes += b;
+        units += b * per;
+        volume += b * per * content;
+        if (x.presentation && b >= boxesPerPallet(x.presentation)) full++;
+        else partial++;
+      }
       return {
         productId: p.id,
         code: p.code,
         name: p.name,
         color: p.color,
-        unitsPerBox: p.unitsPerBox,
+        unit: p.unit,
+        active: p.active,
         boxes,
-        units: boxes * p.unitsPerBox,
+        units,
+        volume,
         pallets: own.length,
+        fullPallets: full,
+        partialPallets: partial,
       };
     });
 
