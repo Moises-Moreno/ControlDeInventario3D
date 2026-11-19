@@ -63,8 +63,9 @@ function useInventoryState(): InventoryState {
       return r
     },
     deleteProduct: async (id) => {
-      const r = await toResult(inventoryApi.deleteProduct(id))
-      if (r.ok) await invalidate(['products'])
+      const r = await toResult(inventoryApi.deleteProduct(id, true))
+      // Se borran pallets, movimientos y recepciones: se refresca todo.
+      if (r.ok) await qc.invalidateQueries()
       return r
     },
 

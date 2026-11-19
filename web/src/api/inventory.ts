@@ -25,6 +25,16 @@ export interface ProductInput {
   presentations: PresentationInput[]
 }
 
+export interface ProductUsage {
+  code: string
+  name: string
+  pallets: number
+  palletsInRack: number
+  movements: number
+  receptionLines: number
+  receptions: number
+}
+
 export interface PalletInput extends PalletBuild {
   productId: number
   presentationId: number
@@ -36,7 +46,9 @@ export const inventoryApi = {
   getProducts: () => api.get<Product[]>('/products'),
   createProduct: (d: ProductInput) => api.post<Product>('/products', d),
   updateProduct: (id: number, d: ProductInput) => api.patch<Product>(`/products/${id}`, d),
-  deleteProduct: (id: number) => api.del<void>(`/products/${id}`),
+  /** Con cascade=true borra también pallets, movimientos y líneas de recepción (solo admin). */
+  deleteProduct: (id: number, cascade = false) => api.del<void>(`/products/${id}${cascade ? '?cascade=true' : ''}`),
+  productUsage: (id: number) => api.get<ProductUsage>(`/products/${id}/uso`),
 
   getRacks: () => api.get<Rack[]>('/racks'),
   createRack: () => api.post<Rack>('/racks'),

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ProductsService } from './products.service.js';
 import { ProductDto } from './dto.js';
@@ -25,8 +25,15 @@ export class ProductsController {
   }
 
   @Roles('admin')
+  @Get(':id/uso')
+  usage(@Param('id', ParseIntPipe) id: number) {
+    return this.products.usage(id);
+  }
+
+  /** Solo admin. Con ?cascade=true borra también pallets, movimientos y líneas de recepción. */
+  @Roles('admin')
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.products.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @Query('cascade') cascade?: string) {
+    return this.products.remove(id, cascade === 'true');
   }
 }

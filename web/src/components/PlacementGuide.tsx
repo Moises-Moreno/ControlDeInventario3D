@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, ChevronDown, MapPin, Route as RouteIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { useInventory } from '@/store/inventory'
@@ -16,6 +16,8 @@ const fmt = (n: number) => n.toLocaleString('es-BO', { maximumFractionDigits: 1 
 interface Props {
   /** Pallets a llevar a su lugar (los que ya estén ubicados se ignoran). */
   palletIds: number[]
+  /** Dibuja su propio plano (false cuando la pantalla ya muestra uno). */
+  showMap?: boolean
 }
 
 /**
@@ -23,7 +25,7 @@ interface Props {
  * el mismo producto junto y lo más cerca posible del ingreso), lo guía con un mapa y
  * un recorrido, y registra la ubicación cuando la confirma.
  */
-export function PlacementGuide({ palletIds }: Props) {
+export function PlacementGuide({ palletIds, showMap = true }: Props) {
   const racks = useInventory((s) => s.racks)
   const pallets = useInventory((s) => s.pallets)
   const products = useInventory((s) => s.products)
@@ -66,12 +68,22 @@ export function PlacementGuide({ palletIds }: Props) {
   const unplaceable = rows.filter((r) => !r.loc).length
 
   // Si cambian los pallets a ubicar, se limpia la guía que ya no corresponde.
+  // Solo se borra la guía que dibujó este componente (no la del buscador).
+  const owns = useRef(false)
   useEffect(() => {
-    if (!targets.length && (guideLocs.length || route)) clearGuide()
+    owns.current = activeId != null
+  }, [activeId])
+  useEffect(() => {
+    if (!targets.length && owns.current) clearGuide()
   }, [targets.length, guideLocs.length, route, clearGuide])
 
   // Al salir de la pantalla no queda la guía dibujada.
-  useEffect(() => () => clearGuide(), [clearGuide])
+  useEffect(
+    () => () => {
+      if (owns.current) clearGuide()
+    },
+    [clearGuide],
+  )
 
   function alternatives(p: Pallet): SlotSuggestion[] {
     const others = rows.filter((r) => r.pallet.id !== p.id && r.loc).map((r) => ({ loc: r.loc!, productId: r.pallet.productId }))
@@ -140,7 +152,7 @@ export function PlacementGuide({ palletIds }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <WarehouseMap racks={racks} pallets={pallets} products={products} guideLocs={guideLocs} route={route} selected={null} />
+      {showMap && <WarehouseMap racks={racks} pallets={pallets} products={products} guideLocs={guideLocs} route={route} selected={null} />}
 
       {unplaceable > 0 && (
         <p className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm" role="alert">

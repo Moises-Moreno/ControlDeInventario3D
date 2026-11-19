@@ -80,20 +80,65 @@ export class ProductsService {
     return this.prisma.product.findUnique({ where: { id }, include: WITH_PRESENTATIONS });
   }
 
-  async remove(id: number) {
+  /** Qué registros se borrarían junto con el producto. */
+  async usage(id: number) {
+    const product = await this.get(id);
+    const pallets = await this.prisma.pallet.findMany({ where: { productId: id }, select: { id: true, status: true, rackId: true } });
+    const ids = pallets.map((p) => p.id);
+    const movements = ids.length ? await this.prisma.movement.count({ where: { palletId: { in: ids } } }) : 0;
+    const lines = await this.prisma.receptionLine.findMany({ where: { presentation: { productId: id } }, select: { receptionId: true } });
+    return {
+      code: product.code,
+      name: product.name,
+      pallets: pallets.length,
+      palletsInRack: pallets.filter((p) => p.status === 'activo' && p.rackId != null).length,
+      movements,
+      receptionLines: lines.length,
+      receptions: new Set(lines.map((l) => l.receptionId)).size,
+    };
+  }
+
+  /**
+   * Elimina un producto. Sin `cascade` solo se permite si nunca se usó. Con `cascade`
+   * (solo admin) borra también sus pallets (liberando las posiciones), los movimientos
+   * de esos pallets y sus líneas de recepción; una recepción que se queda sin líneas se
+   * borra con sus fotos. No se puede deshacer.
+   */
+  async remove(id: number, cascade = false) {
     await this.get(id);
     const pallets = await this.prisma.pallet.count({ where: { productId: id } });
     const lines = await this.prisma.receptionLine.count({ where: { presentation: { productId: id } } });
-    if (pallets > 0 || lines > 0) {
+    if (!cascade && (pallets > 0 || lines > 0)) {
       throw new ConflictException(
-        'No se puede eliminar: el producto tiene pallets o recepciones registradas. Desactívalo para que no se use más.',
+        'El producto tiene pallets o recepciones registradas. Desactívalo, o elimínalo junto con todos sus registros.',
       );
     }
-    await this.prisma.$transaction([
-      this.prisma.presentation.deleteMany({ where: { productId: id } }),
-      this.prisma.product.delete({ where: { id } }),
-    ]);
-    return { ok: true };
+    const deleted = await this.prisma.$transaction(async (tx) => {
+      const palletIds = (await tx.pallet.findMany({ where: { productId: id }, select: { id: true } })).map((p) => p.id);
+      const movements = palletIds.length ? (await tx.movement.deleteMany({ where: { palletId: { in: palletIds } } })).count : 0;
+      const palletsDeleted = (await tx.pallet.deleteMany({ where: { productId: id } })).count;
+
+      const receptionIds = [
+        ...new Set(
+          (await tx.receptionLine.findMany({ where: { presentation: { productId: id } }, select: { receptionId: true } })).map((l) => l.receptionId),
+        ),
+      ];
+      const linesDeleted = (await tx.receptionLine.deleteMany({ where: { presentation: { productId: id } } })).count;
+      let receptionsDeleted = 0;
+      for (const rid of receptionIds) {
+        const left = await tx.receptionLine.count({ where: { receptionId: rid } });
+        const others = await tx.pallet.count({ where: { receptionId: rid } });
+        if (left === 0 && others === 0) {
+          await tx.receptionPhoto.deleteMany({ where: { receptionId: rid } });
+          await tx.reception.delete({ where: { id: rid } });
+          receptionsDeleted++;
+        }
+      }
+      await tx.presentation.deleteMany({ where: { productId: id } });
+      await tx.product.delete({ where: { id } });
+      return { pallets: palletsDeleted, movements, receptionLines: linesDeleted, receptions: receptionsDeleted };
+    });
+    return { ok: true, deleted };
   }
 
   private checkPresentations(list: PresentationDto[]) {

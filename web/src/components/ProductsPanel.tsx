@@ -7,18 +7,9 @@ import { useAuth } from '@/store/auth'
 import type { PresentationInput, ProductInput } from '@/api/inventory'
 import { boxesPerPallet, compositionLabel, stock, UNITS, volumeOf, type Product } from '@/domain/inventory'
 import { Button } from '@/components/ui/button'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PhotoInput } from '@/components/PhotoInput'
+import { DeleteProductDialog } from '@/components/DeleteProductDialog'
 import { cn } from '@/lib/utils'
 
 const fmt = (n: number) => n.toLocaleString('es-BO', { maximumFractionDigits: 2 })
@@ -114,7 +105,7 @@ export function ProductsPanel() {
   const [form, setForm] = useState<ProductInput>(blankForm)
   const [error, setError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [showInactive, setShowInactive] = useState(true)
+  const [showInactive, setShowInactive] = useState(false)
 
   function openNew() {
     setEditing(null)
@@ -172,12 +163,25 @@ export function ProductsPanel() {
   async function remove() {
     if (!editing) return
     const res = await deleteProduct(editing.id)
-    setConfirmDelete(false)
     if (!res.ok) {
-      setError(res.error)
+      toast.error(res.error)
       return
     }
-    toast.success('Producto eliminado.')
+    setConfirmDelete(false)
+    toast.success(`${editing.code} eliminado con todos sus registros.`)
+    setOpen(false)
+  }
+
+  async function deactivate() {
+    if (!editing) return
+    // photo undefined = no reenviar la foto.
+    const res = await updateProduct(editing.id, { ...formFrom(editing), photo: undefined, active: false })
+    if (!res.ok) {
+      toast.error(res.error)
+      return
+    }
+    setConfirmDelete(false)
+    toast.success(`${editing.code} desactivado: ya no aparece en búsquedas ni recepciones.`)
     setOpen(false)
   }
 
@@ -426,22 +430,13 @@ export function ProductsPanel() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar {editing?.code}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Solo se puede eliminar si nunca tuvo pallets ni recepciones. Si ya tiene historial, mejor desactivalo para que no se use más.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-white" onClick={remove}>
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteProductDialog
+        product={editing}
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        onDelete={remove}
+        onDeactivate={deactivate}
+      />
     </div>
   )
 }

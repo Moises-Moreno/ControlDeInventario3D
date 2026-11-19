@@ -1,6 +1,6 @@
 import { getToken, onUnauthorized } from './token'
 
-const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000/api'
+const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api'
 
 /** Error con el mensaje en español que devuelve la API. */
 export class ApiError extends Error {}

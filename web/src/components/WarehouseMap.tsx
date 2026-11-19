@@ -256,24 +256,40 @@ function RouteLayer({ route }: { route: Route }) {
         )
       })}
       {start && <circle cx={start.x} cy={start.v} r={0.3} fill={ENTRY} stroke="#fff" strokeWidth={0.08} />}
-      {route.stops.map((_, i) => {
-        const leg = route.legs[i]
-        const end = leg?.points[leg.points.length - 1]
-        const prev = leg?.points[leg.points.length - 2]
-        if (!end) return null
-        // El número va sobre el pasillo, frente a la fila, sin tapar su código.
-        const v = prev ? end.v + (prev.v - end.v) * 0.5 : end.v
+      {badges(route).map((b) => {
+        const label = b.numbers.join('·')
+        const w = Math.max(0.84, 0.3 * label.length + 0.4)
         return (
-          <g key={i} transform={`translate(${end.x} ${v})`}>
-            <circle r={0.42} fill={GUIDE} stroke="#fff" strokeWidth={0.09} />
+          <g key={b.key} transform={`translate(${b.x} ${b.v})`}>
+            <rect x={-w / 2} y={-0.42} width={w} height={0.84} rx={0.42} fill={GUIDE} stroke="#fff" strokeWidth={0.09} />
             <text textAnchor="middle" y={0.17} fontSize={0.48} fontWeight={800} fill="#1f2937">
-              {i + 1}
+              {label}
             </text>
           </g>
         )
       })}
     </g>
   )
+}
+
+/**
+ * Un número por parada, sobre el pasillo frente a su fila. Si varias paradas caen en la
+ * misma fila (distintos niveles), se juntan en una sola etiqueta ("1·2").
+ */
+function badges(route: Route): { key: string; x: number; v: number; numbers: number[] }[] {
+  const out: { key: string; x: number; v: number; numbers: number[] }[] = []
+  route.stops.forEach((_, i) => {
+    const leg = route.legs[i]
+    const end = leg?.points[leg.points.length - 1]
+    const prev = leg?.points[leg.points.length - 2]
+    if (!end) return
+    const v = prev ? end.v + (prev.v - end.v) * 0.5 : end.v
+    const key = `${end.x.toFixed(2)}|${v.toFixed(2)}`
+    const found = out.find((b) => b.key === key)
+    if (found) found.numbers.push(i + 1)
+    else out.push({ key, x: end.x, v, numbers: [i + 1] })
+  })
+  return out
 }
 
 function Legend({ hasRoute }: { hasRoute: boolean }) {

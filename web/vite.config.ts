@@ -11,4 +11,18 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  server: {
+    // Escucha en la red local: el teléfono o la tablet entran con http://<IP de la PC>:5173
+    host: true,
+    // Las llamadas a /api las reenvía Vite a la API de esta PC (sin CORS ni IPs en el código).
+    proxy: {
+      '/api': 'http://localhost:3000',
+    },
+  },
+  preview: {
+    host: true,
+    proxy: {
+      '/api': 'http://localhost:3000',
+    },
+  },
 })

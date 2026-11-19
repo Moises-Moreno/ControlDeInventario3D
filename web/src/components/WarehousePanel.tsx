@@ -5,6 +5,7 @@ import { useUi } from '@/store/ui'
 import { useBuilder } from '@/store/builder'
 import { useAuth } from '@/store/auth'
 import { PlacementGuide } from '@/components/PlacementGuide'
+import { ProductFinder } from '@/components/ProductFinder'
 import { WarehouseMap } from '@/components/WarehouseMap'
 import {
   freeSlots,
@@ -105,6 +106,8 @@ export function WarehousePanel() {
         </div>
       )}
 
+      <ProductFinder />
+
       {/* Plano del almacén */}
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Plano del almacén</h2>
@@ -126,7 +129,7 @@ export function WarehousePanel() {
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">1 · Pallets sin ubicar ({unplaced.length})</h2>
         {unplaced.length ? (
-          <PlacementGuide palletIds={unplaced.map((p) => p.id)} />
+          <PlacementGuide palletIds={unplaced.map((p) => p.id)} showMap={false} />
         ) : (
           <p className="text-sm text-muted-foreground">
             {pallets.length ? 'Todos los pallets guardados están en el rack.' : 'Aún no hay pallets. Recibí mercadería en Recepción o armalos en la pestaña Armar.'}
