@@ -1,17 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle2, ChevronDown, MapPin, Route as RouteIcon } from 'lucide-react'
+import { CheckCircle2, ChevronDown, MapPin, Printer, Route as RouteIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { useInventory } from '@/store/inventory'
+import { useInventory, useZones } from '@/store/inventory'
 import { useUi } from '@/store/ui'
 import { totals } from '@/domain/pallet'
-import { locCode, productById, sameLoc, type Loc, type Pallet } from '@/domain/inventory'
+import { locCode, parseLocCode, productById, sameLoc, type Loc, type Pallet } from '@/domain/inventory'
+import { verifyScan } from '@/domain/scan'
 import { buildPlan, describeLeg, planRoute, type Route } from '@/domain/warehousePlan'
 import { planPlacement, suggestSlots, type SlotSuggestion } from '@/domain/slotting'
 import { Button } from '@/components/ui/button'
+import { usePrintLabels } from '@/components/LabelSheet'
+import { ScanInput } from '@/components/ScanInput'
 import { WarehouseMap } from '@/components/WarehouseMap'
 import { cn } from '@/lib/utils'
 
 const fmt = (n: number) => n.toLocaleString('es-BO', { maximumFractionDigits: 1 })
+
+/** Resultado del último escaneo, para mostrarlo grande y claro. */
+type Feedback =
+  | { kind: 'info'; message: string }
+  | { kind: 'ok'; message: string }
+  | { kind: 'error'; message: string }
+  | { kind: 'other'; message: string; palletId: number; loc: Loc }
 
 interface Props {
   /** Pallets a llevar a su lugar (los que ya estén ubicados se ignoran). */
@@ -30,6 +40,8 @@ export function PlacementGuide({ palletIds, showMap = true }: Props) {
   const pallets = useInventory((s) => s.pallets)
   const products = useInventory((s) => s.products)
   const placePallet = useInventory((s) => s.placePallet)
+  const zones = useZones()
+  const labelPrinter = usePrintLabels()
   const guideLocs = useUi((s) => s.guideLocs)
   const route = useUi((s) => s.route)
   const setGuide = useUi((s) => s.setGuide)
@@ -40,6 +52,9 @@ export function PlacementGuide({ palletIds, showMap = true }: Props) {
   const [open, setOpen] = useState<number | null>(null)
   const [activeId, setActiveId] = useState<number | 'all' | null>(null)
   const [busy, setBusy] = useState(false)
+  // Escaneo: el pallet que el operador tiene en la mano y el resultado del último escaneo.
+  const [inHand, setInHand] = useState<number | null>(null)
+  const [feedback, setFeedback] = useState<Feedback | null>(null)
 
   const plan = useMemo(() => buildPlan(racks), [racks])
   const targets = useMemo(() => pallets.filter((p) => palletIds.includes(p.id) && !p.loc), [pallets, palletIds])
@@ -53,9 +68,9 @@ export function PlacementGuide({ palletIds, showMap = true }: Props) {
 
   // Sugerencia conjunta: los completos arriba, los mermados abajo y sin repetir posición.
   const base = useMemo(
-    () => planPlacement(targets.map(itemOf), racks, pallets, plan),
+    () => planPlacement(targets.map(itemOf), racks, pallets, plan, zones),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [targets, racks, pallets, plan, products],
+    [targets, racks, pallets, plan, products, zones],
   )
 
   const rows = targets.map((p) => {
@@ -87,7 +102,7 @@ export function PlacementGuide({ palletIds, showMap = true }: Props) {
 
   function alternatives(p: Pallet): SlotSuggestion[] {
     const others = rows.filter((r) => r.pallet.id !== p.id && r.loc).map((r) => ({ loc: r.loc!, productId: r.pallet.productId }))
-    return suggestSlots(itemOf(p), racks, pallets, plan, 5, others)
+    return suggestSlots(itemOf(p), racks, pallets, plan, 5, others, zones)
   }
 
   function guideOne(p: Pallet, loc: Loc) {
@@ -141,6 +156,59 @@ export function PlacementGuide({ palletIds, showMap = true }: Props) {
     if (done) toast.success(done === 1 ? 'Pallet ubicado.' : `${done} pallets ubicados.`)
   }
 
+  /** Lee una etiqueta: de pallet (lo toma en mano) o de rack (verifica que sea el lugar correcto). */
+  function handleScan(raw: string) {
+    const text = raw.trim().toUpperCase()
+    const fail = (message: string) => {
+      navigator.vibrate?.([80, 60, 80])
+      setFeedback({ kind: 'error', message })
+    }
+
+    const scannedPallet = targets.find((p) => p.pal.toUpperCase() === text)
+    if (scannedPallet) {
+      setInHand(scannedPallet.id)
+      setFeedback({ kind: 'info', message: `${scannedPallet.pal} en mano. Ahora escaneá la etiqueta del rack donde lo vas a dejar.` })
+      return
+    }
+    if (/^PAL-[0-9]+$/.test(text)) {
+      fail(`${text} ya está ubicado o no es de esta lista.`)
+      return
+    }
+
+    // ¿De qué pallet se trata? El que está en mano, el único pendiente, o el único cuyo lugar sugerido es ese rack.
+    const loc = parseLocCode(text, racks)
+    let pallet = targets.find((p) => p.id === inHand) ?? (targets.length === 1 ? targets[0] : null)
+    if (!pallet && loc) {
+      const byLoc = rows.filter((r) => r.loc && sameLoc(r.loc, loc))
+      if (byLoc.length === 1) pallet = byLoc[0].pallet
+    }
+    if (!pallet) {
+      fail(loc ? 'Primero escaneá la etiqueta del pallet (PAL-…) que tenés en la mano.' : `No reconozco “${raw.trim()}” como una etiqueta de pallet ni de rack.`)
+      return
+    }
+
+    const expected = rows.find((r) => r.pallet.id === pallet.id)?.loc ?? null
+    const v = verifyScan(text, expected, pallet, racks, pallets, zones)
+    if (v.kind === 'unknown') {
+      fail(`No reconozco “${v.text}” como una posición del almacén.`)
+    } else if (v.kind === 'blocked') {
+      fail(v.reason)
+    } else if (v.kind === 'ok') {
+      navigator.vibrate?.(60)
+      setFeedback({ kind: 'ok', message: `Correcto: ${pallet.pal} va en ${v.code}.` })
+      setInHand(null)
+      void confirm(pallet, v.loc)
+    } else {
+      navigator.vibrate?.([80, 60, 80])
+      setFeedback({
+        kind: 'other',
+        palletId: pallet.id,
+        loc: v.loc,
+        message: `Ese es ${v.code}${v.expected ? ` y el sistema te indicó ${v.expected}` : ''}. Se puede dejar ahí, pero no es el lugar sugerido.`,
+      })
+    }
+  }
+
   if (!targets.length) {
     return (
       <div className="flex items-center gap-3 rounded-2xl border border-border bg-secondary p-4 text-sm">
@@ -153,6 +221,73 @@ export function PlacementGuide({ palletIds, showMap = true }: Props) {
   return (
     <div className="flex flex-col gap-4">
       {showMap && <WarehouseMap racks={racks} pallets={pallets} products={products} guideLocs={guideLocs} route={route} selected={null} />}
+
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          onClick={() =>
+            labelPrinter.print(
+              targets.map((p) => {
+                const product = productById(products, p.productId)
+                return {
+                  code: p.pal,
+                  title: product?.name ?? 'Producto',
+                  lines: [`${totals(p).boxes} cajas · ${p.kind === 'completo' ? 'Completo' : 'Mermado'}`, ...(p.lote ? [`Lote ${p.lote}`] : []), ...(p.vence ? [`Vence ${p.vence.split('-').reverse().join('/')}`] : [])],
+                  color: product?.color,
+                }
+              }),
+            )
+          }
+        >
+          <Printer /> Imprimir etiquetas de pallets
+        </Button>
+      </div>
+      {labelPrinter.sheet}
+
+      <section className="flex flex-col gap-2 rounded-2xl border border-border p-3">
+        <p className="text-sm font-semibold">Confirmar con escáner</p>
+        <p className="text-xs text-muted-foreground">
+          {targets.length > 1 ? 'Escaneá la etiqueta del pallet y después la del rack. ' : 'Escaneá la etiqueta del rack donde lo dejás. '}
+          Con la pistola, tocá el campo y disparala; con el teléfono, usá la cámara.
+        </p>
+        <ScanInput onScan={handleScan} />
+        {feedback && (
+          <div
+            role={feedback.kind === 'error' ? 'alert' : 'status'}
+            className={cn(
+              'flex flex-col gap-2 rounded-xl border p-3 text-sm font-medium',
+              feedback.kind === 'ok' && 'border-[color:var(--ok,#1b7f47)] bg-[color:var(--ok,#1b7f47)]/15',
+              feedback.kind === 'error' && 'border-destructive bg-destructive/15',
+              feedback.kind === 'other' && 'border-[#f59e0b] bg-[#f59e0b]/15',
+              feedback.kind === 'info' && 'border-primary/40 bg-primary/10',
+            )}
+          >
+            <p>
+              {feedback.kind === 'ok' && '✓ '}
+              {feedback.kind === 'error' && '✗ '}
+              {feedback.message}
+            </p>
+            {feedback.kind === 'other' && (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  disabled={busy}
+                  onClick={() => {
+                    const p = targets.find((t) => t.id === feedback.palletId)
+                    if (p) void confirm(p, feedback.loc)
+                    setFeedback(null)
+                    setInHand(null)
+                  }}
+                >
+                  <CheckCircle2 /> Ubicar acá igual
+                </Button>
+                <Button variant="outline" onClick={() => setFeedback(null)}>
+                  Cancelar
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       {unplaceable > 0 && (
         <p className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm" role="alert">
@@ -168,7 +303,7 @@ export function PlacementGuide({ palletIds, showMap = true }: Props) {
           const alts = open === p.id ? alternatives(p) : []
           const meters = suggestion && loc && sameLoc(suggestion.loc, loc) ? suggestion.meters : null
           return (
-            <li key={p.id} className={cn('flex flex-col gap-3 rounded-2xl border bg-card p-3', active ? 'border-primary' : 'border-border')}>
+            <li key={p.id} className={cn('flex flex-col gap-3 rounded-2xl border bg-card p-3', active || inHand === p.id ? 'border-primary' : 'border-border', inHand === p.id && 'ring-2 ring-primary')}>
               <div className="flex items-center gap-3">
                 <span className="size-4 shrink-0 rounded border border-border" style={{ background: product?.color }} />
                 <div className="min-w-0 flex-1">
@@ -182,6 +317,7 @@ export function PlacementGuide({ palletIds, showMap = true }: Props) {
                     >
                       {p.kind === 'completo' ? 'Completo' : 'Mermado'}
                     </span>
+                    {inHand === p.id && <span className="rounded-md bg-primary px-1.5 text-[11px] font-semibold uppercase text-primary-foreground">En mano</span>}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {product?.name ?? 'Producto'} · {boxes} cajas

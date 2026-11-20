@@ -102,3 +102,60 @@
     touch-action: manipulation;
   }
 }
+
+/* Etiquetas con código de barras: la hoja solo existe al imprimir. */
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 8mm;
+  }
+  body.printing-labels > *:not(.print-only) {
+    display: none !important;
+  }
+  body.printing-labels,
+  body.printing-labels html {
+    background: #fff !important;
+    overflow: visible !important;
+  }
+  body.printing-labels .print-only {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3mm;
+    color: #000;
+    background: #fff;
+  }
+  .label {
+    box-sizing: border-box;
+    break-inside: avoid;
+    padding: 2.5mm 3mm;
+    border: 0.3mm solid #000;
+    border-left-width: 2.5mm;
+    background: #fff;
+    color: #000;
+    font-family: ui-sans-serif, system-ui, Arial, sans-serif;
+  }
+  .label-bars {
+    display: block;
+    width: 100%;
+    height: 11mm;
+  }
+  .label-code {
+    margin-top: 1mm;
+    text-align: center;
+    font-size: 5mm;
+    font-weight: 800;
+    letter-spacing: 0.2mm;
+  }
+  .label-title {
+    text-align: center;
+    font-size: 3.4mm;
+    font-weight: 700;
+  }
+  .label-line {
+    text-align: center;
+    font-size: 2.8mm;
+  }
+}

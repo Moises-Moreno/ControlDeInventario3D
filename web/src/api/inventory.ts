@@ -1,5 +1,5 @@
 import { api } from './client'
-import type { Product, Pallet, Rack, Loc } from '@/domain/inventory'
+import type { Product, Pallet, Rack, Loc, Category } from '@/domain/inventory'
 import type { PalletBuild } from '@/domain/pallet'
 
 export interface PresentationInput {
@@ -22,6 +22,8 @@ export interface ProductInput {
   /** Foto (data URL), null para quitarla o undefined para no tocarla. */
   photo?: string | null
   active: boolean
+  /** Categoría (null = sin categoría). */
+  categoryId: number | null
   presentations: PresentationInput[]
 }
 
@@ -33,6 +35,11 @@ export interface ProductUsage {
   movements: number
   receptionLines: number
   receptions: number
+}
+
+export interface CategoryInput {
+  name: string
+  color?: string
 }
 
 export interface PalletInput extends PalletBuild {
@@ -50,9 +57,14 @@ export const inventoryApi = {
   deleteProduct: (id: number, cascade = false) => api.del<void>(`/products/${id}${cascade ? '?cascade=true' : ''}`),
   productUsage: (id: number) => api.get<ProductUsage>(`/products/${id}/uso`),
 
+  getCategories: () => api.get<Category[]>('/categories'),
+  createCategory: (d: CategoryInput) => api.post<Category>('/categories', d),
+  updateCategory: (id: number, d: CategoryInput) => api.patch<Category>(`/categories/${id}`, d),
+  deleteCategory: (id: number) => api.del<void>(`/categories/${id}`),
+
   getRacks: () => api.get<Rack[]>('/racks'),
   createRack: () => api.post<Rack>('/racks'),
-  updateRack: (id: number, d: { name?: string; levels?: number; positions?: number }) =>
+  updateRack: (id: number, d: { name?: string; levels?: number; positions?: number; categoryId?: number | null }) =>
     api.patch<Rack>(`/racks/${id}`, d),
   deleteRack: (id: number) => api.del<void>(`/racks/${id}`),
 

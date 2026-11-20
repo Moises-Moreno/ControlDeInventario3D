@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
-import { useInventory } from '@/store/inventory'
+import { useInventory, useZones } from '@/store/inventory'
 import { useUi } from '@/store/ui'
 import { useBuilder } from '@/store/builder'
 import { useAuth } from '@/store/auth'
 import { PlacementGuide } from '@/components/PlacementGuide'
 import { ProductFinder } from '@/components/ProductFinder'
+import { CategoriesSection } from '@/components/CategoriesSection'
+import { locLabels, usePrintLabels } from '@/components/LabelSheet'
 import { WarehouseMap } from '@/components/WarehouseMap'
+import { canPlace } from '@/domain/zones'
 import {
   freeSlots,
   occupancy,
@@ -44,9 +47,19 @@ export function WarehousePanel() {
 
   const [rackError, setRackError] = useState('')
 
-  const free = freeSlots(racks, pallets)
+  const zones = useZones()
+  const categories = useInventory((s) => s.categories)
+  const labelPrinter = usePrintLabels()
   const { cap, used } = occupancy(racks, pallets)
   const placing = pallets.find((p) => p.id === placingId) ?? null
+  // Solo las posiciones libres donde ese pallet no se mezcla con otra categoría.
+  const free = freeSlots(racks, pallets).filter((loc) => {
+    if (!placing) return true
+    const rack = racks.find((r) => r.id === loc.rackId)
+    if (!rack) return false
+    const others = pallets.filter((p) => p.id !== placing.id && p.loc?.rackId === rack.id).map((p) => zones.categoryOf(p.productId))
+    return canPlace(zones.categoryOf(placing.productId), rack, others, zones.names).ok
+  })
   const unplaced = pallets.filter((p) => !p.loc)
 
   async function place(loc: Loc) {
@@ -184,15 +197,18 @@ export function WarehousePanel() {
         </div>
       </section>
 
+      <CategoriesSection />
+
       {/* Racks */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">3 · Racks</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">4 · Racks</h2>
         <ul className="flex flex-col gap-2">
           {racks.map((r) => (
-            <RackEditor key={r.id} rack={r} onError={setRackError} onDelete={async () => { const res = await deleteRack(r.id); setRackError(res.ok ? '' : res.error) }} />
+            <RackEditor key={r.id} rack={r} onError={setRackError} onPrint={() => labelPrinter.print(locLabels([r], categories))} onDelete={async () => { const res = await deleteRack(r.id); setRackError(res.ok ? '' : res.error) }} />
           ))}
         </ul>
         {rackError && <p className="text-sm text-destructive" role="alert">{rackError}</p>}
+        <div className="flex flex-wrap gap-2">
         <button
           type="button"
           disabled={racks.length >= MAX_RACKS}
@@ -201,6 +217,16 @@ export function WarehousePanel() {
         >
           Agregar rack
         </button>
+        <button
+          type="button"
+          disabled={!racks.length}
+          onClick={() => labelPrinter.print(locLabels(racks, categories))}
+          className="h-9 rounded-md border border-border bg-card px-3 font-semibold hover:bg-secondary disabled:opacity-50"
+        >
+          Imprimir etiquetas de todos los racks
+        </button>
+        </div>
+        {labelPrinter.sheet}
         <p className="text-xs text-muted-foreground">
           Hasta {MAX_RACKS} racks, {MAX_LEVELS} niveles y {MAX_POS} posiciones por nivel. Van de dos en dos, espalda con espalda, con un pasillo entre cada par. La altura de los niveles se ajusta sola al pallet más alto. {used} de {cap} posiciones ocupadas.
         </p>
@@ -209,10 +235,12 @@ export function WarehousePanel() {
   )
 }
 
-function RackEditor({ rack, onError, onDelete }: { rack: Rack; onError: (msg: string) => void; onDelete: () => void }) {
+function RackEditor({ rack, onError, onDelete, onPrint }: { rack: Rack; onError: (msg: string) => void; onDelete: () => void; onPrint: () => void }) {
   const pallets = useInventory((s) => s.pallets)
   const renameRack = useInventory((s) => s.renameRack)
   const setRackSize = useInventory((s) => s.setRackSize)
+  const setRackCategory = useInventory((s) => s.setRackCategory)
+  const categories = useInventory((s) => s.categories)
   const isAdmin = useAuth((s) => s.user?.role) === 'admin'
   const [name, setName] = useState(rack.name)
 
@@ -239,8 +267,28 @@ function RackEditor({ rack, onError, onDelete }: { rack: Rack; onError: (msg: st
         <span className="flex-1 text-right text-xs text-muted-foreground">
           {inRack.length} de {rack.levels * rack.positions} ocupadas
         </span>
+        <button type="button" onClick={onPrint} className="px-1 text-xs font-medium text-primary">Etiquetas</button>
         {isAdmin && <button type="button" onClick={onDelete} className="px-1 text-xs font-medium text-destructive">Quitar</button>}
       </div>
+      <label className="flex min-w-0 flex-col gap-1">
+        <span className="text-xs font-medium text-muted-foreground">Categoría que acepta este rack</span>
+        <select
+          value={rack.categoryId ?? ''}
+          disabled={!isAdmin}
+          onChange={async (e) => {
+            const res = await setRackCategory(rack.id, e.target.value ? Number(e.target.value) : null)
+            onError(res.ok ? '' : res.error)
+          }}
+          className="h-11 w-full rounded-md border border-border bg-secondary px-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70"
+        >
+          <option value="">Sin categoría (cualquiera, sin mezclar)</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3">
         <RackStepper rack={rack} field="levels" label="Niveles de alto" max={MAX_LEVELS} onError={onError} setRackSize={setRackSize} />
         <RackStepper rack={rack} field="positions" label="Filas del rack" max={MAX_POS} onError={onError} setRackSize={setRackSize} />

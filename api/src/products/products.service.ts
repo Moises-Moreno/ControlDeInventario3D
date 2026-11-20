@@ -1,5 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { canPlace } from '../common/zones.js';
+import { categoryNames } from '../common/zone-check.js';
 import type { PresentationDto, ProductDto } from './dto.js';
 
 const WITH_PRESENTATIONS = { presentations: { orderBy: { id: 'asc' as const } } };
@@ -17,9 +19,11 @@ export class ProductsService {
     await this.ensureUniqueCode(code, null);
     const presentations = data.presentations?.length ? data.presentations : [defaultPresentation()];
     this.checkPresentations(presentations);
+    await this.ensureCategory(data.categoryId);
     return this.prisma.product.create({
       data: {
         code,
+        categoryId: data.categoryId ?? null,
         name: data.name.trim(),
         unit: data.unit.trim(),
         color: data.color,
@@ -36,6 +40,10 @@ export class ProductsService {
     const code = data.code.trim().toUpperCase();
     await this.ensureUniqueCode(code, id);
     if (data.presentations) this.checkPresentations(data.presentations);
+    if (data.categoryId !== undefined) {
+      await this.ensureCategory(data.categoryId);
+      await this.checkPlacedPallets(id, data.categoryId);
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.product.update({
@@ -48,6 +56,7 @@ export class ProductsService {
           // undefined = no tocar; null = quitar la foto
           ...(data.photo !== undefined ? { photo: data.photo } : {}),
           ...(data.active !== undefined ? { active: data.active } : {}),
+          ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
           example: false,
         },
       });
@@ -152,6 +161,33 @@ export class ProductsService {
     const p = await this.prisma.product.findUnique({ where: { id } });
     if (!p) throw new NotFoundException('No se encontró el producto.');
     return p;
+  }
+
+  private async ensureCategory(categoryId: number | null | undefined) {
+    if (categoryId == null) return;
+    const cat = await this.prisma.category.findUnique({ where: { id: categoryId } });
+    if (!cat) throw new BadRequestException('No se encontró la categoría indicada.');
+  }
+
+  /** Cambiar la categoría no puede dejar pallets ubicados en un rack de otra categoría. */
+  private async checkPlacedPallets(productId: number, categoryId: number | null) {
+    const placed = await this.prisma.pallet.findMany({
+      where: { productId, status: 'activo', rackId: { not: null } },
+      select: { id: true, rack: true },
+    });
+    if (!placed.length) return;
+    const names = await categoryNames(this.prisma);
+    for (const p of placed) {
+      const rack = p.rack!;
+      const others = await this.prisma.pallet.findMany({
+        where: { rackId: rack.id, status: 'activo', productId: { not: productId } },
+        select: { product: { select: { categoryId: true } } },
+      });
+      const check = canPlace(categoryId, rack, others.map((o) => o.product.categoryId), names);
+      if (!check.ok) {
+        throw new ConflictException(`${check.reason} Mové sus pallets a otro rack antes de cambiar la categoría.`);
+      }
+    }
   }
 
   private async ensureUniqueCode(code: string, selfId: number | null) {

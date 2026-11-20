@@ -12,13 +12,20 @@ const RACKS = ['A', 'B', 'C', 'D'];
 const FILAS = 6;
 const NIVELES = 4;
 
+// Categorías de ejemplo: cada rack puede asignarse a una para que no se mezclen.
+const CATEGORIES = [
+  { name: 'Detergente en polvo', color: '#38bdf8' },
+  { name: 'Detergente en barra', color: '#f59e0b' },
+  { name: 'Detergente líquido', color: '#34d399' },
+];
+
 const PRODUCTS = [
   {
-    code: 'LAV-001', name: 'Lavandina', unit: 'L', color: '#5fa8d3',
+    code: 'LAV-001', name: 'Lavandina', unit: 'L', color: '#5fa8d3', category: 'Detergente líquido',
     presentations: [{ name: 'Envase 5 L', contentPerUnit: 5, unitsPerBox: 4, front: 5, depth: 2, levels: 4 }],
   },
   {
-    code: 'JAB-001', name: 'Jabón en barra', unit: 'un', color: '#e8d9a8',
+    code: 'JAB-001', name: 'Jabón en barra', unit: 'un', color: '#e8d9a8', category: 'Detergente en barra',
     presentations: [{ name: 'Barra 200 g', contentPerUnit: 1, unitsPerBox: 24, front: 4, depth: 4, levels: 5 }],
   },
 ];
@@ -38,6 +45,14 @@ async function seedUsers() {
   await prisma.user.create({ data: { username: 'admin', passwordHash: await bcrypt.hash(adminPass, 10), role: 'admin' } });
   await prisma.user.create({ data: { username: 'operador', passwordHash: await bcrypt.hash(operadorPass, 10), role: 'operador' } });
   console.log(prod ? 'Usuarios admin y operador creados.' : 'Usuarios de ejemplo: admin/admin123 (admin) y operador/operador123 (operador).');
+}
+
+async function seedCategories() {
+  for (const c of CATEGORIES) {
+    if (await prisma.category.findUnique({ where: { name: c.name } })) continue;
+    await prisma.category.create({ data: c });
+    console.log(`Categoría "${c.name}" creada.`);
+  }
 }
 
 async function seedRacks() {
@@ -60,9 +75,10 @@ async function seedRacks() {
 async function seedProducts() {
   for (const p of PRODUCTS) {
     if (await prisma.product.findUnique({ where: { code: p.code } })) continue;
+    const category = await prisma.category.findUnique({ where: { name: p.category } });
     await prisma.product.create({
       data: {
-        code: p.code, name: p.name, unit: p.unit, color: p.color,
+        code: p.code, name: p.name, unit: p.unit, color: p.color, categoryId: category?.id ?? null,
         presentations: { create: p.presentations },
       },
     });
@@ -77,6 +93,7 @@ async function main() {
     const empty = (await prisma.rack.count()) === 0 && (await prisma.product.count()) === 0;
     await seedUsers();
     if (empty) {
+      await seedCategories();
       await seedRacks();
       await seedProducts();
     }
@@ -84,6 +101,7 @@ async function main() {
     return;
   }
   await seedUsers();
+  await seedCategories();
   await seedRacks();
   await seedProducts();
   console.log('Datos base listos.');

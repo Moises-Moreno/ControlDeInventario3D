@@ -11,6 +11,11 @@ export class ImportDto {
   @IsString()
   exportedAt?: string;
 
+  @ApiPropertyOptional({ type: [Object], description: 'Categorías (opcional: los archivos viejos no la traen).' })
+  @IsOptional()
+  @IsArray()
+  categories?: unknown[];
+
   @ApiProperty({ type: [Object] })
   @IsArray()
   products!: unknown[];

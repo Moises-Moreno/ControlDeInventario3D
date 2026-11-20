@@ -28,7 +28,7 @@ const BLANK_PRESENTATION: PresentationInput = {
 }
 
 function blankForm(): ProductInput {
-  return { code: '', name: '', unit: 'L', color: '#5fa8d3', photo: null, active: true, presentations: [{ ...BLANK_PRESENTATION }] }
+  return { code: '', name: '', unit: 'L', color: '#5fa8d3', photo: null, active: true, categoryId: null, presentations: [{ ...BLANK_PRESENTATION }] }
 }
 
 function formFrom(p: Product): ProductInput {
@@ -39,6 +39,7 @@ function formFrom(p: Product): ProductInput {
     color: p.color,
     photo: p.photo,
     active: p.active,
+    categoryId: p.categoryId,
     presentations: p.presentations.map((x) => ({
       id: x.id,
       name: x.name,
@@ -90,6 +91,7 @@ function NumberInput({
 
 export function ProductsPanel() {
   const products = useInventory((s) => s.products)
+  const categories = useInventory((s) => s.categories)
   const pallets = useInventory((s) => s.pallets)
   const addProduct = useInventory((s) => s.addProduct)
   const updateProduct = useInventory((s) => s.updateProduct)
@@ -299,6 +301,20 @@ export function ProductsPanel() {
               </Field>
               <Field label="Nombre del producto" className="col-span-2">
                 <input type="text" maxLength={60} value={form.name} onChange={(e) => patch({ name: e.target.value })} className={INPUT} autoComplete="off" />
+              </Field>
+              <Field label="Categoría (define en qué racks va)" className="col-span-2">
+                <select
+                  value={form.categoryId ?? ''}
+                  onChange={(e) => patch({ categoryId: e.target.value ? Number(e.target.value) : null })}
+                  className={INPUT}
+                >
+                  <option value="">Sin categoría</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="Color de la caja (en el 3D)">
                 <input

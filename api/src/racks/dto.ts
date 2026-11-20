@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Matches, Max, Min, ValidateIf } from 'class-validator';
 import { MAX_LEVELS, MAX_POS } from '../common/limits.js';
 
 export class UpdateRackDto {
@@ -22,4 +22,10 @@ export class UpdateRackDto {
   @Min(1)
   @Max(MAX_POS, { message: `Hasta ${MAX_POS} posiciones por nivel.` })
   positions?: number;
+
+  @ApiPropertyOptional({ example: 1, nullable: true, description: 'Categoría de producto que acepta el rack. null = sin zona asignada.' })
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsInt()
+  categoryId?: number | null;
 }

@@ -1,6 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MAX_RACKS, RACK_LETTERS } from '../common/limits.js';
+import { canPlace } from '../common/zones.js';
+import { categoryNames } from '../common/zone-check.js';
 import type { UpdateRackDto } from './dto.js';
 
 @Injectable()
@@ -37,6 +39,8 @@ export class RacksService {
       await this.prisma.rack.update({ where: { id }, data: { name } });
     }
 
+    if (dto.categoryId !== undefined) await this.setCategory(rack, dto.categoryId);
+
     if (dto.levels != null) await this.resize(id, rack.name, 'level', 'levels', dto.levels);
     if (dto.positions != null) await this.resize(id, rack.name, 'pos', 'positions', dto.positions);
 
@@ -53,6 +57,26 @@ export class RacksService {
     }
     await this.prisma.rack.delete({ where: { id } });
     return { ok: true };
+  }
+
+  /** Asigna la categoría del rack; si ya tiene pallets, todos tienen que ser de esa categoría. */
+  private async setCategory(rack: { id: number; name: string }, categoryId: number | null) {
+    if (categoryId != null) {
+      const cat = await this.prisma.category.findUnique({ where: { id: categoryId } });
+      if (!cat) throw new BadRequestException('No se encontró la categoría indicada.');
+      const names = await categoryNames(this.prisma);
+      const inRack = await this.prisma.pallet.findMany({
+        where: { rackId: rack.id, status: 'activo' },
+        select: { product: { select: { categoryId: true } } },
+      });
+      for (const p of inRack) {
+        const check = canPlace(p.product.categoryId, { name: rack.name, categoryId }, [], names);
+        if (!check.ok) {
+          throw new ConflictException(`${check.reason} Movelos o dalos de baja antes de asignar la categoría.`);
+        }
+      }
+    }
+    await this.prisma.rack.update({ where: { id: rack.id }, data: { categoryId } });
   }
 
   private async resize(id: number, rackName: string, field: 'level' | 'pos', column: 'levels' | 'positions', value: number) {

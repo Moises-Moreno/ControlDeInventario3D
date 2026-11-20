@@ -7,11 +7,12 @@ import {
   occupancy,
   levelHeight,
   palletAt,
+  parseLocCode,
   type Pallet,
   type Rack,
 } from './inventory'
 
-const racks: Rack[] = [{ id: 1, name: 'A', levels: 2, positions: 2 }]
+const racks: Rack[] = [{ id: 1, name: 'A', levels: 2, positions: 2, categoryId: null }]
 
 function pallet(id: number, productId: number, partial: Partial<Pallet> = {}): Pallet {
   return { id, pal: palCode(id), productId, presentationId: null, receptionId: null, front: 2, depth: 2, rows: 1, loose: 0, lote: '', vence: '', kind: 'mermado', loc: null, ...partial }
@@ -24,6 +25,24 @@ describe('palCode y locCode', () => {
   })
   it('formatea la posición', () => {
     expect(locCode(racks[0], { rackId: 1, level: 2, pos: 3 })).toBe('A-F003-N2')
+  })
+})
+
+describe('parseLocCode', () => {
+  const big: Rack[] = [{ id: 7, name: 'A', levels: 4, positions: 6, categoryId: null }]
+  it('es la inversa de locCode', () => {
+    const loc = { rackId: 7, level: 3, pos: 5 }
+    expect(parseLocCode(locCode(big[0], loc), big)).toEqual(loc)
+  })
+  it('acepta minúsculas y espacios de lectores de código', () => {
+    expect(parseLocCode(' a-f001-n1 ', big)).toEqual({ rackId: 7, level: 1, pos: 1 })
+  })
+  it('rechaza lo que no es una posición del almacén', () => {
+    expect(parseLocCode('PAL-001', big)).toBeNull()
+    expect(parseLocCode('Z-F001-N1', big)).toBeNull()
+    expect(parseLocCode('A-F007-N1', big)).toBeNull()
+    expect(parseLocCode('A-F001-N5', big)).toBeNull()
+    expect(parseLocCode('A-F000-N1', big)).toBeNull()
   })
 })
 

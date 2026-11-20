@@ -4,9 +4,12 @@
  *  - Los pallets completos van en los niveles de arriba.
  *  - El mismo producto se agrupa (mismo rack y misma fila) para encontrarlo fácil.
  *  - Entre posiciones válidas, gana la que queda más cerca del ingreso.
+ *  - Zonas: un rack de una categoría solo recibe productos de esa categoría, y un rack sin
+ *    categoría no mezcla (ver zones.ts). Se prefiere la zona de la categoría del producto.
  */
 import { freeSlots, locCode, palletAt, type Loc, type Pallet, type Rack } from './inventory'
 import { distanceFromEntry, type WarehousePlan } from './warehousePlan'
+import { canPlace, type ZoneContext } from './zones'
 
 export type PalletKind = 'completo' | 'mermado'
 
@@ -37,6 +40,9 @@ export function isLowLevel(level: number, levels: number): boolean {
 }
 
 const WRONG_BAND = 100
+/** Premios por zona: ganan sobre la distancia al ingreso (no sobre la banda de niveles). */
+const OWN_ZONE = 60
+const SAME_CATEGORY_RACK = 30
 
 interface Occupant {
   loc: Loc
@@ -104,6 +110,7 @@ export function suggestSlots(
   plan: WarehousePlan,
   limit = 3,
   reserved: Occupant[] = [],
+  zones?: ZoneContext,
 ): SlotSuggestion[] {
   const occupants: Occupant[] = [
     ...pallets.filter((p) => p.loc).map((p) => ({ loc: p.loc!, productId: p.productId })),
@@ -111,12 +118,40 @@ export function suggestSlots(
   ]
   const taken = (loc: Loc) => reserved.some((r) => r.loc.rackId === loc.rackId && r.loc.level === loc.level && r.loc.pos === loc.pos)
 
+  const itemCategory = zones ? zones.categoryOf(item.productId) : null
+  const categoryName = itemCategory != null ? zones?.names.get(itemCategory) : undefined
+
+  // Zonas: se descartan los racks donde este producto se mezclaría con otra categoría.
+  const allowed = new Map<number, { zone: 'own' | 'same' | 'free' } | null>()
+  const zoneOf = (rack: Rack) => {
+    if (!zones) return { zone: 'free' as const }
+    if (!allowed.has(rack.id)) {
+      const others = occupants.filter((o) => o.loc.rackId === rack.id).map((o) => zones.categoryOf(o.productId))
+      const check = canPlace(itemCategory, rack, others, zones.names)
+      allowed.set(
+        rack.id,
+        !check.ok ? null : { zone: rack.categoryId != null ? 'own' : others.length > 0 ? 'same' : 'free' },
+      )
+    }
+    return allowed.get(rack.id)!
+  }
+
   const free = freeSlots(racks, pallets as Pallet[]).filter((l) => !taken(l))
   return free
+    .filter((loc) => zoneOf(racks.find((r) => r.id === loc.rackId)!) !== null)
     .map((loc) => {
       const rack = racks.find((r) => r.id === loc.rackId)!
       const { score, meters, reasons } = scoreSlot(loc, item, rack, occupants, plan)
-      return { loc, code: locCode(rack, loc), score, meters, reasons }
+      const zone = zoneOf(rack)!.zone
+      let adjusted = score
+      if (zone === 'own') {
+        adjusted -= OWN_ZONE
+        reasons.unshift(`Zona ${categoryName ?? 'de su categoría'}`)
+      } else if (zone === 'same') {
+        adjusted -= SAME_CATEGORY_RACK
+        reasons.unshift(`Rack que ya tiene ${categoryName ?? 'su categoría'}`)
+      }
+      return { loc, code: locCode(rack, loc), score: adjusted, meters, reasons }
     })
     .sort((a, b) => a.score - b.score || a.code.localeCompare(b.code))
     .slice(0, limit)
@@ -137,12 +172,13 @@ export function planPlacement(
   racks: Rack[],
   pallets: Pick<Pallet, 'loc' | 'productId'>[],
   plan: WarehousePlan,
+  zones?: ZoneContext,
 ): PlacementPlan[] {
   const reserved: Occupant[] = []
   const result = new Map<string | number, SlotSuggestion | null>()
   const ordered = [...items].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'completo' ? -1 : 1))
   for (const item of ordered) {
-    const [best] = suggestSlots(item, racks, pallets, plan, 1, reserved)
+    const [best] = suggestSlots(item, racks, pallets, plan, 1, reserved, zones)
     result.set(item.key, best ?? null)
     if (best) reserved.push({ loc: best.loc, productId: item.productId })
   }

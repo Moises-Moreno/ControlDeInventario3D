@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { normalizeBuild } from '../common/build.js';
 import { palCode, locCode } from '../common/codes.js';
 import { toApiPallet } from '../common/mappers.js';
+import { checkRack } from '../common/zone-check.js';
 import type { CreatePalletDto, PlaceDto } from './dto.js';
 
 function isUniqueViolation(e: unknown): boolean {
@@ -47,8 +48,17 @@ export class PalletsService {
   }
 
   async recount(id: number, dto: CreatePalletDto, user: string) {
-    await this.getActive(id);
+    const current = await this.getActive(id);
     const presentation = await this.ensurePresentation(dto.productId, dto.presentationId);
+    if (current.rackId != null && dto.productId !== current.productId) {
+      // Si ya está en un rack, el producto nuevo tiene que ser de la categoría de ese rack.
+      const rack = await this.prisma.rack.findUnique({ where: { id: current.rackId } });
+      const product = await this.prisma.product.findUnique({ where: { id: dto.productId }, select: { categoryId: true } });
+      if (rack) {
+        const zone = await checkRack(this.prisma, product?.categoryId ?? null, rack, [current.id]);
+        if (!zone.ok) throw new ConflictException(zone.reason);
+      }
+    }
     const b = normalizeBuild(dto);
     const updated = await this.prisma.$transaction(async (tx) => {
       const u = await tx.pallet.update({
@@ -77,6 +87,10 @@ export class PalletsService {
     if (dto.level > rack.levels || dto.pos > rack.positions) {
       throw new BadRequestException('Esa posición no existe en el rack.');
     }
+    // Zonas: no se mezclan categorías de producto en un rack.
+    const product = await this.prisma.product.findUnique({ where: { id: pallet.productId }, select: { categoryId: true } });
+    const zone = await checkRack(this.prisma, product?.categoryId ?? null, rack, [pallet.id]);
+    if (!zone.ok) throw new ConflictException(zone.reason);
     const wasPlaced = pallet.rackId != null;
     const fromText = wasPlaced ? await this.locText(pallet.rackId!, pallet.level!, pallet.pos!) : null;
     const toText = locCode(rack.name, dto.level, dto.pos);

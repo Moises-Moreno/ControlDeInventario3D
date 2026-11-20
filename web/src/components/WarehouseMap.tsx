@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useInventory } from '@/store/inventory'
 import { buildPlan, aisleName, CELL, AISLE, type Route, type WarehousePlan } from '@/domain/warehousePlan'
 import { sameLoc, type Loc, type Pallet, type Product, type Rack } from '@/domain/inventory'
 import { cn } from '@/lib/utils'
@@ -26,6 +27,7 @@ const CLOSED = '#dc2626'
  */
 export function WarehouseMap({ racks, pallets, products, guideLocs = [], route = null, selected = null, onSelectFila, className }: Props) {
   const plan = useMemo(() => buildPlan(racks), [racks])
+  const categories = useInventory((s) => s.categories)
   if (!plan.racks.length) {
     return <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Agregá un rack para ver el plano.</p>
   }
@@ -49,6 +51,7 @@ export function WarehouseMap({ racks, pallets, products, guideLocs = [], route =
         {/* Racks */}
         {plan.racks.map((rp) => {
           const rack = racks.find((r) => r.id === rp.rackId)!
+          const zone = categories.find((c) => c.id === rack.categoryId)
           return (
             <g key={rp.rackId}>
               {Array.from({ length: rack.positions }, (_, i) => {
@@ -118,8 +121,8 @@ export function WarehouseMap({ racks, pallets, products, guideLocs = [], route =
               })}
               {/* Letra del rack */}
               <g transform={`translate(${plan.x0 - 0.62} ${rp.v0 + CELL.d / 2})`} style={{ pointerEvents: 'none' }}>
-                <circle r={0.42} fill="var(--primary)" />
-                <text textAnchor="middle" y={0.17} fontSize={0.5} fontWeight={800} fill="var(--primary-foreground)">
+                <circle r={0.42} fill={zone ? zone.color : 'var(--primary)'} stroke={zone ? 'rgba(0,0,0,0.35)' : undefined} strokeWidth={0.05} />
+                <text textAnchor="middle" y={0.17} fontSize={0.5} fontWeight={800} fill={zone ? '#0f172a' : 'var(--primary-foreground)'}>
                   {rp.name}
                 </text>
               </g>
@@ -146,7 +149,7 @@ export function WarehouseMap({ racks, pallets, products, guideLocs = [], route =
         {route && <RouteLayer route={route} />}
       </svg>
 
-      <Legend hasRoute={!!route?.legs.length} />
+      <Legend hasRoute={!!route?.legs.length} zones={racks.filter((r) => r.categoryId != null).map((r) => ({ rack: r.name, category: categories.find((c) => c.id === r.categoryId) }))} />
     </div>
   )
 }
@@ -292,7 +295,7 @@ function badges(route: Route): { key: string; x: number; v: number; numbers: num
   return out
 }
 
-function Legend({ hasRoute }: { hasRoute: boolean }) {
+function Legend({ hasRoute, zones }: { hasRoute: boolean; zones: { rack: string; category?: { name: string; color: string } }[] }) {
   const item = 'flex items-center gap-1.5'
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs text-muted-foreground">
@@ -310,6 +313,11 @@ function Legend({ hasRoute }: { hasRoute: boolean }) {
           <span className="inline-block h-1 w-5 rounded-full" style={{ background: GUIDE }} /> Recorrido
         </span>
       )}
+      {zones.map((z) => (
+        <span key={z.rack} className={item}>
+          <span className="inline-block size-3 rounded-full border border-black/30" style={{ background: z.category?.color }} /> Rack {z.rack}: {z.category?.name ?? 'categoría'}
+        </span>
+      ))}
       <span className="w-full">Cada fila muestra sus niveles de izquierda a derecha: N1 (abajo) … N4 (arriba).</span>
     </div>
   )

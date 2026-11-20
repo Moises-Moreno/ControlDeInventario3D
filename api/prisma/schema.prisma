@@ -13,6 +13,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Categoría de producto (detergente en polvo, en barra, líquido...). Cada rack puede
+/// asignarse a una categoría para que no se mezclen productos de distinto tipo.
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  color    String    @default("#64748b")
+  products Product[]
+  racks    Rack[]
+
+  @@map("categories")
+}
+
 model Product {
   id            Int            @id @default(autoincrement())
   /// Id / código del producto (único, en mayúsculas).
@@ -26,6 +38,8 @@ model Product {
   active        Boolean        @default(true)
   example       Boolean        @default(false)
   createdAt     DateTime       @default(now()) @map("created_at")
+  categoryId    Int?           @map("category_id")
+  category      Category?      @relation(fields: [categoryId], references: [id])
   presentations Presentation[]
   pallets       Pallet[]
 
@@ -56,6 +70,9 @@ model Rack {
   name      String   @unique
   levels    Int
   positions Int
+  /// Categoría de producto que acepta este rack (nulo = sin zona asignada).
+  categoryId Int?     @map("category_id")
+  category   Category? @relation(fields: [categoryId], references: [id])
   pallets   Pallet[]
 
   @@map("racks")

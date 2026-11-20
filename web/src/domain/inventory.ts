@@ -23,6 +23,14 @@ export interface Presentation {
   active: boolean
 }
 
+/** Categoría de producto: define en qué racks puede ir (zonas). */
+export interface Category {
+  id: number
+  name: string
+  /** Color (hex). */
+  color: string
+}
+
 export interface Product {
   id: number
   /** Id / código único en mayúsculas. */
@@ -37,6 +45,8 @@ export interface Product {
   active: boolean
   /** Marca de producto de ejemplo (seed). */
   example?: boolean
+  /** Categoría (null = sin categoría). */
+  categoryId: number | null
   presentations: Presentation[]
 }
 
@@ -68,6 +78,8 @@ export interface Rack {
   name: string
   levels: number
   positions: number
+  /** Categoría que acepta el rack (null = sin zona asignada). */
+  categoryId: number | null
 }
 
 export const MAX_RACKS = 6
@@ -82,6 +94,21 @@ export function palCode(n: number): string {
 /** Código de una posición: rack A, fila 3, nivel 1 → A-F003-N1. */
 export function locCode(rack: Rack | undefined, loc: Loc): string {
   return `${rack ? rack.name : '?'}-F${String(loc.pos).padStart(3, '0')}-N${loc.level}`
+}
+
+/**
+ * Inversa de locCode: lee un código escaneado (A-F003-N2) y devuelve la ubicación, o null si
+ * no tiene ese formato, el rack no existe o la fila/nivel quedan fuera del rack.
+ */
+export function parseLocCode(text: string, racks: Rack[]): Loc | null {
+  const m = /^([A-Z]{1,3})-F([0-9]{3})-N([0-9]+)$/.exec(text.trim().toUpperCase())
+  if (!m) return null
+  const rack = racks.find((r) => r.name.toUpperCase() === m[1])
+  if (!rack) return null
+  const pos = Number(m[2])
+  const level = Number(m[3])
+  if (pos < 1 || pos > rack.positions || level < 1 || level > rack.levels) return null
+  return { rackId: rack.id, level, pos }
 }
 
 /** Presentación de un pallet (o null si es un pallet viejo sin presentación). */

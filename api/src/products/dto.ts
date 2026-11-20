@@ -14,6 +14,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -95,6 +96,12 @@ export class ProductDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  @ApiPropertyOptional({ nullable: true, description: 'Categoría del producto (define en qué racks puede ir). null = sin categoría.' })
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null)
+  @IsInt()
+  categoryId?: number | null;
 
   @ApiPropertyOptional({ type: [PresentationDto] })
   @IsOptional()

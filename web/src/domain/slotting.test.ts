@@ -3,7 +3,7 @@ import type { Rack } from './inventory'
 import { buildPlan, describeLeg, distanceFromEntry, planRoute, shortestPath } from './warehousePlan'
 import { isLowLevel, planPlacement, suggestSlots } from './slotting'
 
-const racks: Rack[] = ['A', 'B', 'C', 'D'].map((name, i) => ({ id: i + 1, name, levels: 4, positions: 6 }))
+const racks: Rack[] = ['A', 'B', 'C', 'D'].map((name, i) => ({ id: i + 1, name, levels: 4, positions: 6, categoryId: null }))
 const plan = buildPlan(racks)
 const id = (name: string) => racks.find((r) => r.name === name)!.id
 
@@ -99,5 +99,69 @@ describe('indicaciones en palabras', () => {
     const steps = describeLeg(plan, route.legs[0])
     expect(steps.some((s) => s.startsWith('Subí') && s.includes('izquierdo'))).toBe(true)
     expect(steps.some((s) => s.includes('Pasillo 1'))).toBe(true)
+  })
+})
+
+describe('zonas por categoría', () => {
+  // A = detergente en polvo (1), B = líquido (2), C y D sin zona asignada.
+  const names = new Map([
+    [1, 'Detergente en polvo'],
+    [2, 'Detergente líquido'],
+  ])
+  const zoned: Rack[] = racks.map((r) => ({ ...r, categoryId: r.name === 'A' ? 1 : r.name === 'B' ? 2 : null }))
+  const zplan = buildPlan(zoned)
+  const cat: Record<number, number | null> = { 10: 1, 20: 2, 30: null }
+  const zones = { categoryOf: (p: number) => cat[p] ?? null, names }
+  const rackName = (rackId: number) => zoned.find((r) => r.id === rackId)!.name
+  const item = (productId: number, kind: 'completo' | 'mermado' = 'completo') => ({ key: productId, kind, productId })
+
+  it('un producto solo se sugiere en el rack de su categoría', () => {
+    const slots = suggestSlots(item(10), zoned, [], zplan, 200, [], zones)
+    expect(slots.length).toBeGreaterThan(0)
+    // A es su zona; C y D (sin zona, vacíos) sirven de desborde; B (líquido) nunca.
+    expect(slots.some((s) => rackName(s.loc.rackId) === 'B')).toBe(false)
+    expect(rackName(slots[0].loc.rackId)).toBe('A')
+  })
+
+  it('prefiere su zona aunque otro rack esté más cerca del ingreso', () => {
+    const [best] = suggestSlots(item(20), zoned, [], zplan, 1, [], zones)
+    expect(rackName(best.loc.rackId)).toBe('B')
+    expect(best.reasons[0]).toContain('Zona Detergente líquido')
+  })
+
+  it('si la zona se llena, desborda a un rack sin categoría y nunca a otra zona', () => {
+    const fillA = Array.from({ length: 4 * 6 }, (_, i) => ({
+      productId: 10,
+      loc: { rackId: id('A'), level: (i % 4) + 1, pos: Math.floor(i / 4) + 1 },
+    }))
+    const slots = suggestSlots(item(10), zoned, fillA, zplan, 200, [], zones)
+    expect(slots.length).toBeGreaterThan(0)
+    expect(slots.every((s) => ['C', 'D'].includes(rackName(s.loc.rackId)))).toBe(true)
+  })
+
+  it('un rack sin categoría no mezcla: tras usarlo con una categoría, la otra no entra', () => {
+    const inD = [{ productId: 10, loc: { rackId: id('D'), level: 1, pos: 1 } }]
+    // Producto sin categoría: solo puede ir a racks sin zona; D ya tiene detergente en polvo → solo C.
+    const slots = suggestSlots(item(30), zoned, inD, zplan, 200, [], zones)
+    expect(slots.length).toBeGreaterThan(0)
+    expect(slots.every((s) => rackName(s.loc.rackId) === 'C')).toBe(true)
+  })
+
+  it('planPlacement respeta las zonas dentro de una misma recepción', () => {
+    const plans = planPlacement([item(10), item(20), item(30)], zoned, [], zplan, zones)
+    const where = (key: number) => rackName(plans.find((p) => p.key === key)!.suggestion!.loc.rackId)
+    expect(where(10)).toBe('A')
+    expect(where(20)).toBe('B')
+    expect(['C', 'D']).toContain(where(30))
+  })
+
+  it('sin lugar en ninguna zona permitida → no sugiere nada', () => {
+    const onlyA: Rack[] = [{ ...zoned[0] }]
+    const fill = Array.from({ length: 4 * 6 }, (_, i) => ({
+      productId: 10,
+      loc: { rackId: onlyA[0].id, level: (i % 4) + 1, pos: Math.floor(i / 4) + 1 },
+    }))
+    expect(suggestSlots(item(20), onlyA, [], buildPlan(onlyA), 5, [], zones)).toHaveLength(0)
+    expect(suggestSlots(item(10), onlyA, fill, buildPlan(onlyA), 5, [], zones)).toHaveLength(0)
   })
 })
