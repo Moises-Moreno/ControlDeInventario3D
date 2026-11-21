@@ -7,7 +7,14 @@ export const PANEL_WIDTH = { min: 340, max: 640, default: 420 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
+/** Qué se muestra en 3D (solo a pedido): el almacén o el pallet que se está armando. */
+export type View3D = 'almacen' | 'pallet'
+
 interface LayoutState {
+  /** 3D abierto a pedido, o null: lo principal es el plano 2D. */
+  view3d: View3D | null
+  open3d: (kind: View3D) => void
+  close3d: () => void
   /** Fracción de alto que ocupa la escena en teléfono/tablet vertical. */
   sceneFraction: number
   /** Ancho del panel en laptop/tablet horizontal (px). */
@@ -26,6 +33,9 @@ export const useLayout = create<LayoutState>()(
       sceneFraction: SCENE_FRACTION.default,
       panelWidth: PANEL_WIDTH.default,
       sceneFull: false,
+      view3d: null,
+      open3d: (kind) => set({ view3d: kind }),
+      close3d: () => set({ view3d: null, sceneFull: false }),
       setSceneFraction: (f) => set({ sceneFraction: clamp(f, SCENE_FRACTION.min, SCENE_FRACTION.max) }),
       setPanelWidth: (w) => set({ panelWidth: clamp(Math.round(w), PANEL_WIDTH.min, PANEL_WIDTH.max) }),
       toggleSceneFull: () => set((s) => ({ sceneFull: !s.sceneFull })),

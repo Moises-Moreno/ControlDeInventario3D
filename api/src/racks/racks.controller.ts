@@ -14,11 +14,13 @@ export class RacksController {
     return this.racks.list();
   }
 
+  @Roles('admin')
   @Post()
   create() {
     return this.racks.create();
   }
 
+  @Roles('admin')
   @Patch(':id')
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateRackDto) {
     return this.racks.update(id, dto);

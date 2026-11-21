@@ -1,13 +1,15 @@
 import { Boxes } from 'lucide-react'
 import { useUi } from '@/store/ui'
 import { cn } from '@/lib/utils'
-import { NAV } from './nav'
+import { useAuth } from '@/store/auth'
+import { navFor } from './nav'
 import { LogoutButton, ThemeToggle, UserBadge } from './HeaderActions'
 
 /** Barra lateral de íconos para laptop y tablet horizontal. */
 export function SideRail() {
   const tab = useUi((s) => s.tab)
   const setTab = useUi((s) => s.setTab)
+  const items = navFor(useAuth((s) => s.user?.role) === 'admin')
 
   return (
     <nav
@@ -20,7 +22,7 @@ export function SideRail() {
       </div>
 
       <ul className="flex w-full flex-col items-center gap-1 px-2">
-        {NAV.map(({ id, label, icon: Icon }) => {
+        {items.map(({ id, label, icon: Icon }) => {
           const active = tab === id
           return (
             <li key={id} className="w-full">

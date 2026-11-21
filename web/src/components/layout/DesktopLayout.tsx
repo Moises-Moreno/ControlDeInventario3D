@@ -3,16 +3,18 @@ import { useUi } from '@/store/ui'
 import { PANEL_WIDTH, useLayout } from '@/store/layout'
 import { navItem } from './nav'
 import { SideRail } from './SideRail'
-import { SceneStage } from './SceneStage'
+import { Stage3D } from './Stage3D'
+import { MapView } from '@/components/MapView'
 import { Splitter } from './Splitter'
 import { TabContent } from './TabContent'
 
-/** Laptop y tablet horizontal: barra de íconos, panel redimensionable y escena grande. */
+/** Laptop y tablet horizontal: barra de íconos, panel redimensionable y plano 2D grande (3D a pedido). */
 export function DesktopLayout() {
   const tab = useUi((s) => s.tab)
   const panelWidth = useLayout((s) => s.panelWidth)
   const setPanelWidth = useLayout((s) => s.setPanelWidth)
   const sceneFull = useLayout((s) => s.sceneFull)
+  const view3d = useLayout((s) => s.view3d)
   const rowRef = useRef<HTMLDivElement>(null)
   const item = navItem(tab)
 
@@ -52,9 +54,17 @@ export function DesktopLayout() {
           </>
         )}
 
-        <main aria-label="Vista 3D" className="relative min-w-0 flex-1">
-          <SceneStage />
-        </main>
+        {view3d ? (
+          <main aria-label="Vista 3D" className="relative min-w-0 flex-1">
+            <Stage3D kind={view3d} />
+          </main>
+        ) : (
+          <main aria-label="Plano del almacén" className="min-w-0 flex-1 overflow-y-auto bg-background p-5">
+            <div className="mx-auto w-full max-w-5xl">
+              <MapView />
+            </div>
+          </main>
+        )}
       </div>
     </div>
   )

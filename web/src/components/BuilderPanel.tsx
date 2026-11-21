@@ -54,7 +54,7 @@ export function BuilderPanel() {
       {/* Paso 1: producto */}
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          1 · Producto del pallet
+          Producto del pallet
         </h2>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Producto</span>
@@ -140,7 +140,7 @@ export function BuilderPanel() {
       {/* Paso 2: armado */}
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          2 · Armado del pallet
+          Armado del pallet
         </h2>
         <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3">
           <Stepper label="Cajas de frente" value={b.front} min={LIMITS.front.min} max={LIMITS.front.max} onChange={(v) => b.set({ front: v })} onStep={(d) => b.step('front', d)} />
@@ -189,7 +189,7 @@ export function BuilderPanel() {
       {/* Paso 3: pallets armados */}
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          3 · Pallets armados
+          Pallets armados
         </h2>
         <ul className="flex flex-col gap-1.5">
           {pallets.map((p) => (

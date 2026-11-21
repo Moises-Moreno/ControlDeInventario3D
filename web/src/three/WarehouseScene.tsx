@@ -158,6 +158,14 @@ export function WarehouseScene() {
               gapSize={0.25}
             />
           ))}
+        {/* Número de cada parada, sobre el punto donde termina su tramo */}
+        {route &&
+          route.stops.map((_s, i) => {
+            const leg = route.legs[i]
+            const end = leg?.points[leg.points.length - 1]
+            if (!end) return null
+            return <Label3D key={`stop-${i}`} text={String(i + 1)} shape="circle" size={0.7} bg={colors.guide} fg="#1f2937" position={[end.x, 1.3, end.v]} />
+          })}
       </group>
 
       <OrbitControls

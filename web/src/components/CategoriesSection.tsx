@@ -39,9 +39,9 @@ export function CategoriesSection() {
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">3 · Categorías de producto</h2>
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Categorías de producto</h2>
       <p className="text-xs text-muted-foreground">
-        Elegí la categoría de cada producto (en Productos) y asigná cada rack a una categoría: el sistema solo ubica ahí productos de esa categoría y no deja que se mezclen.
+        Cada rack acepta solo productos de su categoría.
       </p>
 
       {categories.length === 0 && (

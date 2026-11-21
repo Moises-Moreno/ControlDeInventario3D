@@ -1,21 +1,19 @@
-import { useRef } from 'react'
 import { Boxes } from 'lucide-react'
 import { useUi } from '@/store/ui'
-import { SCENE_FRACTION, useLayout } from '@/store/layout'
+import { useLayout } from '@/store/layout'
 import { navItem } from './nav'
 import { BottomNav } from './BottomNav'
 import { LogoutButton, ThemeToggle, UserBadge } from './HeaderActions'
-import { SceneStage } from './SceneStage'
-import { Splitter } from './Splitter'
+import { Stage3D } from './Stage3D'
 import { TabContent } from './TabContent'
 
-/** Teléfono y tablet vertical: escena arriba (ajustable), panel debajo y navegación inferior. */
+/**
+ * Teléfono y tablet vertical: el panel usa toda la pantalla (el plano 2D va dentro de cada
+ * sección) y el 3D se abre a pantalla completa solo cuando se pide.
+ */
 export function StackedLayout() {
   const tab = useUi((s) => s.tab)
-  const sceneFraction = useLayout((s) => s.sceneFraction)
-  const setSceneFraction = useLayout((s) => s.setSceneFraction)
-  const sceneFull = useLayout((s) => s.sceneFull)
-  const regionRef = useRef<HTMLDivElement>(null)
+  const view3d = useLayout((s) => s.view3d)
   const item = navItem(tab)
 
   return (
@@ -33,40 +31,19 @@ export function StackedLayout() {
         </div>
       </header>
 
-      <div ref={regionRef} className="flex min-h-0 flex-1 flex-col">
-        <section
-          aria-label="Vista 3D"
-          className="relative min-h-0"
-          style={{ flex: sceneFull ? '1 1 auto' : `0 0 ${sceneFraction * 100}%` }}
-        >
-          <SceneStage compact />
-        </section>
-
-        {!sceneFull && (
-          <>
-            <Splitter
-              orientation="horizontal"
-              label="Ajustar el tamaño de la vista 3D"
-              valueNow={Math.round(sceneFraction * 100)}
-              valueMin={Math.round(SCENE_FRACTION.min * 100)}
-              valueMax={Math.round(SCENE_FRACTION.max * 100)}
-              onDrag={(_x, y) => {
-                const r = regionRef.current?.getBoundingClientRect()
-                if (r && r.height > 0) setSceneFraction((y - r.top) / r.height)
-              }}
-              onStep={(d) => setSceneFraction(sceneFraction + d * 0.05)}
-              onReset={() => setSceneFraction(SCENE_FRACTION.default)}
-            />
-            <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
-              <div className="mx-auto w-full max-w-2xl">
-                <TabContent />
-              </div>
-            </main>
-          </>
-        )}
-      </div>
+      <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+        <div className="mx-auto w-full max-w-2xl">
+          <TabContent />
+        </div>
+      </main>
 
       <BottomNav />
+
+      {view3d && (
+        <section aria-label="Vista 3D" className="fixed inset-0 z-40 bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+          <Stage3D kind={view3d} compact />
+        </section>
+      )}
     </div>
   )
 }

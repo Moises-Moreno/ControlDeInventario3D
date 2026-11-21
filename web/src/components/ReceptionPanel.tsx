@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Ban, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Plus, Trash2 } from 'lucide-react'
+import { Ban, Box, ChevronLeft, ChevronRight, ClipboardCheck, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useInventory } from '@/store/inventory'
 import { useReception, type DraftLine } from '@/store/reception'
 import { useScene } from '@/store/scene'
 import { useUi } from '@/store/ui'
+import { useLayout } from '@/store/layout'
 import { useAuth } from '@/store/auth'
 import { ApiError } from '@/api/client'
 import { receptionsApi, useReceptions, type ReceptionDetail } from '@/api/receptions'
@@ -25,7 +26,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { PhotoInput } from '@/components/PhotoInput'
 import { SignaturePad } from '@/components/SignaturePad'
-import { PlacementGuide } from '@/components/PlacementGuide'
 import { cn } from '@/lib/utils'
 
 const fmt = (n: number) => n.toLocaleString('es-BO', { maximumFractionDigits: 2 })
@@ -59,8 +59,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export function ReceptionPanel() {
-  const step = useReception((s) => s.step)
-  return step === 'ubicar' ? <PlaceStep /> : <ReceiveStep />
+  return <ReceiveStep />
 }
 
 /** Convierte lo tecleado (litros, envases o cajas) a la unidad del producto. */
@@ -80,6 +79,8 @@ function ReceiveStep() {
   const user = useAuth((s) => s.user)
   const requestNewProduct = useUi((s) => s.requestNewProduct)
   const setPreview = useScene((s) => s.setPreview)
+  const setTab = useUi((s) => s.setTab)
+  const open3d = useLayout((s) => s.open3d)
 
   const lines = useReception((s) => s.lines)
   const observations = useReception((s) => s.observations)
@@ -203,7 +204,8 @@ function ReceiveStep() {
       })
       await qc.invalidateQueries()
       confirm(detail)
-      toast.success(`Recepción ${detail.code} confirmada: ${detail.pallets.length} pallets por ubicar.`)
+      setTab('guardar')
+      toast.success(`Recepción ${detail.code} confirmada: ${detail.pallets.length} pallets para guardar.`)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'No se pudo confirmar la recepción.')
     } finally {
@@ -213,7 +215,7 @@ function ReceiveStep() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Section title="1 · Producto recibido">
+      <Section title="Producto recibido">
         {activeProducts.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border p-3 text-sm text-muted-foreground">
             No hay productos activos. Creá uno para empezar a recibir mercadería.
@@ -338,10 +340,13 @@ function ReceiveStep() {
               <ChevronRight />
             </Button>
           </div>
+          <Button variant="outline" className="self-start" onClick={() => open3d('pallet')}>
+            <Box /> Ver pallet en 3D
+          </Button>
         </Section>
       )}
 
-      <Section title={`2 · Lo recibido (${lines.length})`}>
+      <Section title={`Lo recibido (${lines.length})`}>
         {lines.length === 0 ? (
           <p className="text-sm text-muted-foreground">Todavía no agregaste productos a esta recepción.</p>
         ) : (
@@ -358,7 +363,7 @@ function ReceiveStep() {
         )}
       </Section>
 
-      <Section title="3 · Datos de la recepción">
+      <Section title="Datos de la recepción">
         <dl className="grid grid-cols-[repeat(2,minmax(0,1fr))] gap-3 text-sm">
           <div>
             <dt className="text-xs font-medium text-muted-foreground">Fecha</dt>
@@ -370,6 +375,11 @@ function ReceiveStep() {
           </div>
         </dl>
 
+        <details className="group rounded-xl border border-border p-3">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Agregar observaciones o fotos (opcional){observations || photos.length ? ` · ${photos.length} ${photos.length === 1 ? 'foto' : 'fotos'}${observations ? ' y observaciones' : ''}` : ''}
+          </summary>
+          <div className="mt-3 flex flex-col gap-3">
         <Field label="Observaciones (opcional)">
           <textarea
             value={observations}
@@ -382,6 +392,8 @@ function ReceiveStep() {
         </Field>
 
         <PhotoInput label="Fotos del estado de la mercadería (opcionales)" photos={photos} onChange={setPhotos} max={8} />
+          </div>
+        </details>
         <SignaturePad label="Firma de quien recepciona" onChange={setSignature} />
       </Section>
 
@@ -396,7 +408,6 @@ function ReceiveStep() {
       </Button>
       {lines.length > 0 && !signature && <p className="-mt-3 text-center text-xs text-muted-foreground">Falta la firma de quien recepciona.</p>}
 
-      <RecentReceptions />
     </div>
   )
 }
@@ -464,56 +475,12 @@ function LineRow({ line, products, onRemove }: { line: DraftLine; products: Prod
 /* Paso 2: llevar los pallets a su lugar                               */
 /* ------------------------------------------------------------------ */
 
-function PlaceStep() {
-  const confirmed = useReception((s) => s.confirmed)
-  const reset = useReception((s) => s.reset)
-  const setTab = useUi((s) => s.setTab)
-  const pallets = useInventory((s) => s.pallets)
-
-  if (!confirmed) return null
-  const ids = confirmed.pallets.map((p) => p.id)
-  const left = pallets.filter((p) => ids.includes(p.id) && !p.loc).length
-
-  return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-start gap-3 rounded-2xl border border-[color:var(--ok,#1b7f47)]/50 bg-[color:var(--ok,#1b7f47)]/10 p-4">
-        <CheckCircle2 className="mt-0.5 size-6 shrink-0 text-[color:var(--ok,#1b7f47)]" aria-hidden />
-        <div className="min-w-0 text-sm">
-          <p className="text-base font-bold">Recepción {confirmed.code} confirmada</p>
-          <p className="text-muted-foreground">
-            {fmtDateTime(confirmed.receivedAt)} · {confirmed.user} · {confirmed.pallets.length} pallets
-          </p>
-          <ul className="mt-1">
-            {confirmed.lines.map((l, i) => (
-              <li key={i}>
-                {l.productName}: {fmt(l.quantity)} {l.unit} ({l.boxes} cajas)
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      <Section title={left > 0 ? `Llevá los pallets a su lugar (${left} pendientes)` : 'Ubicación'}>
-        <PlacementGuide palletIds={ids} />
-      </Section>
-
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={reset}>
-          <Plus /> Nueva recepción
-        </Button>
-        <Button variant="outline" onClick={() => setTab('almacen')}>
-          Ver el almacén
-        </Button>
-      </div>
-    </div>
-  )
-}
-
 /* ------------------------------------------------------------------ */
 /* Recepciones anteriores                                              */
 /* ------------------------------------------------------------------ */
 
-function RecentReceptions() {
+/** Últimas recepciones con su detalle (en "Más"). */
+export function RecentReceptions() {
   const { data } = useReceptions()
   const [openId, setOpenId] = useState<number | null>(null)
   if (!data?.length) return null

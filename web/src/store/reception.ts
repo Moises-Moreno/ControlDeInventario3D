@@ -12,7 +12,7 @@ export interface DraftLine {
 }
 
 interface ReceptionState {
-  /** recibir: se cargan los productos · ubicar: ya confirmada, se llevan los pallets a su lugar. */
+  /** Siempre 'recibir': guardar los pallets es la sección Guardar (se mantiene por compatibilidad). */
   step: 'recibir' | 'ubicar'
   lines: DraftLine[]
   observations: string
@@ -47,7 +47,7 @@ export const useReception = create<ReceptionState>()(
       setObservations: (observations) => set({ observations }),
       setPhotos: (photos) => set({ photos }),
       setSignature: (signature) => set({ signature }),
-      confirm: (confirmed) => set({ step: 'ubicar', confirmed, lines: [], observations: '', photos: [], signature: null }),
+      confirm: (confirmed) => set({ step: 'recibir', confirmed, lines: [], observations: '', photos: [], signature: null }),
       reset: () => set({ ...BLANK }),
     }),
     {

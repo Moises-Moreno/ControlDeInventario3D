@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Boxes, LocateFixed, Maximize2, Minimize2, type LucideIcon } from 'lucide-react'
+import { Boxes, LocateFixed, Map as MapIcon, Maximize2, Minimize2, type LucideIcon } from 'lucide-react'
 import { BuilderScene } from '@/three/BuilderScene'
 import { WarehouseScene } from '@/three/WarehouseScene'
 import { hasWebGL } from '@/three/webgl'
@@ -9,8 +9,7 @@ import { useInventory } from '@/store/inventory'
 import { useUi } from '@/store/ui'
 import { useTheme } from '@/store/theme'
 import { useScene } from '@/store/scene'
-import { useReception } from '@/store/reception'
-import { useLayout } from '@/store/layout'
+import { useLayout, type View3D } from '@/store/layout'
 import { productById, occupancy } from '@/domain/inventory'
 import { cn } from '@/lib/utils'
 
@@ -42,18 +41,21 @@ function OverlayButton({
   )
 }
 
-/** Escena 3D (armador o almacén) con sus controles superpuestos. */
-export function SceneStage({ compact = false }: { compact?: boolean }) {
+/**
+ * Escena 3D (armador o almacén) con sus controles superpuestos. Se carga recién cuando se
+ * pide (ver Stage3D): lo principal es el plano 2D.
+ */
+export function SceneStage({ kind, compact = false }: { kind: View3D; compact?: boolean }) {
   const [webgl] = useState(hasWebGL)
   const tab = useUi((s) => s.tab)
   const placingId = useUi((s) => s.placingId)
   const requestFrame = useScene((s) => s.requestFrame)
   const preview = useScene((s) => s.preview)
-  const receptionStep = useReception((s) => s.step)
   const theme = useTheme((s) => s.theme)
   const sceneFull = useLayout((s) => s.sceneFull)
   const toggleSceneFull = useLayout((s) => s.toggleSceneFull)
   const setSceneFull = useLayout((s) => s.setSceneFull)
+  const close3d = useLayout((s) => s.close3d)
 
   const productId = useBuilder((s) => s.productId)
   const products = useInventory((s) => s.products)
@@ -63,27 +65,27 @@ export function SceneStage({ compact = false }: { compact?: boolean }) {
   const product = productById(products, productId)
   const color = preview?.color ?? product?.color ?? '#c89a5a'
   const looseHex = looseColor(color, theme)
-  // El almacén se ve en su sección y al llevar los pallets recibidos a su lugar.
-  const warehouse = tab === 'almacen' || (tab === 'recepcion' && receptionStep === 'ubicar')
+  const warehouse = kind === 'almacen'
   const { cap, used } = occupancy(racks, pallets)
   const placing = pallets.find((p) => p.id === placingId) ?? null
 
-  // Esc sale de pantalla completa.
+  // Esc sale de pantalla completa o, si no, vuelve al plano.
   useEffect(() => {
-    if (!sceneFull) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSceneFull(false)
+      if (e.key !== 'Escape') return
+      if (sceneFull) setSceneFull(false)
+      else close3d()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [sceneFull, setSceneFull])
+  }, [sceneFull, setSceneFull, close3d])
 
   let title: string
   let subtitle: string
   if (warehouse) {
     title = placing ? `Ubicando ${placing.pal}` : 'Almacén'
     subtitle = placing ? 'tocá una posición libre' : `${used} de ${cap} ocupadas`
-  } else if (preview && tab === 'recepcion') {
+  } else if (preview && tab === 'recibir') {
     title = preview.title
     subtitle = preview.subtitle
   } else {
@@ -128,12 +130,15 @@ export function SceneStage({ compact = false }: { compact?: boolean }) {
         </div>
         {webgl && (
           <div className="flex shrink-0 gap-2">
-            <OverlayButton icon={LocateFixed} label="Vista inicial" onClick={requestFrame} showLabel={!compact} />
+            <OverlayButton icon={MapIcon} label="Volver al plano" onClick={close3d} showLabel />
+            <OverlayButton icon={LocateFixed} label="Vista inicial" onClick={requestFrame} showLabel={false} />
+            {!compact && (
             <OverlayButton
               icon={sceneFull ? Minimize2 : Maximize2}
               label={sceneFull ? 'Salir de pantalla completa' : 'Pantalla completa'}
               onClick={toggleSceneFull}
             />
+            )}
           </div>
         )}
       </div>
